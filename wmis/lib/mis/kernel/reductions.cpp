@@ -27,7 +27,16 @@ bool neighborhood_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
             }
 
             if (status.weights[v] >= neighbor_weights) {
+                std::cout << status.graph[v].size() << std::endl;
                 br_alg->set(v, IS_status::included);
+
+                // update lower solution
+                if (status.is_node_lower_status_available) {
+                    if (status.node_lower_status[v] == IS_status::excluded) {
+                        std::cout << status.graph[v].size() << std::endl;
+                        br_alg->flip_include_exclude_lower(v);
+                    }
+                }
             }
         }
     }
@@ -61,6 +70,14 @@ bool clique_neighborhood_reduction_fast::reduce(branch_and_reduce_algorithm* br_
 
             if (status.weights[v] >= neighbor_weights) {
                 br_alg->set(v, IS_status::included);
+
+                // update lower solution
+                if (status.is_node_lower_status_available) {
+                    if (status.node_lower_status[v] == IS_status::excluded) {
+                        br_alg->flip_include_exclude_lower(v);
+                    }
+                }
+
                 continue;
             }
 
@@ -93,6 +110,13 @@ bool clique_neighborhood_reduction_fast::reduce(branch_and_reduce_algorithm* br_
 
             if (is_reducible) {
                 br_alg->set(v, IS_status::included);
+
+                // update lower solution
+                if (status.is_node_lower_status_available) {
+                    if (status.node_lower_status[v] == IS_status::excluded) {
+                        br_alg->flip_include_exclude_lower(v);
+                    }
+                }
             }
         }
     }
@@ -112,6 +136,13 @@ bool clique_neighborhood_reduction::reduce(branch_and_reduce_algorithm* br_alg) 
 
         if (status.node_status[v] == IS_status::not_set && partition_into_cliques(v)) {
             br_alg->set(v, IS_status::included);
+
+            // update lower solution
+            if (status.is_node_lower_status_available) {
+                if (status.node_lower_status[v] == IS_status::excluded) {
+                    br_alg->flip_include_exclude_lower(v);
+                }
+            }
         }
     }
 
@@ -277,6 +308,13 @@ bool critical_set_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 
             // found isolated node
             br_alg->set(node, IS_status::included);
+
+            // update lower solution
+            if (status.is_node_lower_status_available) {
+                if (status.node_lower_status[node] == IS_status::excluded) {
+                    br_alg->flip_include_exclude_lower(node);
+                }
+            }
         }
     }
 
@@ -313,6 +351,14 @@ bool fold2_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
             if (status.weights[v] >= status.weights[neighbors[0]] + status.weights[neighbors[1]]) {
                 // v is always best choice of the three vertices
                 br_alg->set(v, IS_status::included);
+
+                // update lower solution
+                if (status.is_node_lower_status_available) {
+                    if (status.node_lower_status[v] == IS_status::excluded) {
+                        br_alg->flip_include_exclude_lower(v);
+                    }
+                }
+
                 continue;
             }
 
@@ -322,6 +368,13 @@ bool fold2_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
                     // clique of size 3
                     if (status.weights[v] >= status.weights[u] && status.weights[v] >= status.weights[neighbors[0]]) {
                         br_alg->set(v, IS_status::included);
+
+                        // update lower solution
+                        if (status.is_node_lower_status_available) {
+                            if (status.node_lower_status[v] == IS_status::excluded) {
+                                br_alg->flip_include_exclude_lower(v);
+                            }
+                        }
                     }
                     is_clique = true;
                     break;
@@ -370,6 +423,25 @@ void fold2_reduction::fold(branch_and_reduce_algorithm* br_alg, const fold_nodes
 
     br_alg->add_next_level_node(nodes.main);
     br_alg->add_next_level_neighborhood(nodes.main);
+
+    if (status.is_node_lower_status_available) {
+        // update lower solution after fold
+        // flip in either case (nodes.main is now folded node)
+        if (status.node_lower_status[nodes.main] == IS_status::included) {
+            bool is_independent = true;
+            for (auto v : status.graph[nodes.main]) {
+                if (status.node_lower_status[v] == IS_status::included) {
+                    is_independent = false;
+                    break;
+                }
+            }
+            if (!is_independent) {
+                br_alg->flip_include_exclude_lower(nodes.main);
+            }
+        } else {
+            br_alg->flip_include_exclude_lower(nodes.main);
+        }
+    }
 }
 
 void fold2_reduction::restore(branch_and_reduce_algorithm* br_alg) {
@@ -483,6 +555,14 @@ bool clique_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
             // also handles completely isolated cliques
             if (max_isolated.weight >= max_non_isolated.weight) {
                 br_alg->set(max_isolated.node, IS_status::included);
+
+                // update lower solution
+                if (status.is_node_lower_status_available) {
+                    if (status.node_lower_status[max_isolated.node] == IS_status::excluded) {
+                        br_alg->flip_include_exclude_lower(max_isolated.node);
+                    }
+                }
+
                 continue;
             }
 
@@ -493,12 +573,27 @@ bool clique_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 
             for (auto neighbor : isolated) {
                 br_alg->set(neighbor, IS_status::excluded);
+
+                // update lower solution
+                if (status.is_node_lower_status_available) {
+                    if (status.node_lower_status[neighbor] == IS_status::included) {
+                        br_alg->flip_include_exclude_lower(neighbor);
+                    }
+                }
             }
 
             for (size_t i = 0; i < non_isolated.size(); i++) {
                 NodeID neighbor = non_isolated[i];
                 if (status.weights[neighbor] <= max_isolated.weight) {
                     br_alg->set(neighbor, IS_status::excluded);
+
+                    // update lower solution
+                    if (status.is_node_lower_status_available) {
+                        if (status.node_lower_status[neighbor] == IS_status::included) {
+                            br_alg->flip_include_exclude_lower(neighbor);
+                        }
+                    }
+
                     non_isolated[i] = non_isolated.back();
                     non_isolated.pop_back();
                     i--;
@@ -519,6 +614,7 @@ void clique_reduction::fold(branch_and_reduce_algorithm* br_alg, const weighted_
     auto& status = br_alg->status;
 
     br_alg->set(isolated.node, IS_status::folded);
+
     status.reduction_offset += isolated.weight;
 
     for (auto node : non_isolated) {
@@ -530,6 +626,13 @@ void clique_reduction::fold(branch_and_reduce_algorithm* br_alg, const weighted_
     br_alg->add_next_level_neighborhood(non_isolated);
 
     restore_vec.emplace_back(isolated, std::move(non_isolated));
+
+    // update lower solution
+    if (status.is_node_lower_status_available) {
+        if (status.node_lower_status[isolated.node] == IS_status::included) {
+            br_alg->flip_include_exclude_lower(isolated.node);
+        }
+    }
 }
 
 void clique_reduction::restore(branch_and_reduce_algorithm* br_alg) {
@@ -594,6 +697,13 @@ bool twin_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 
             if (status.weights[v] >= neighbors_weight) {
                 br_alg->set(v, IS_status::included);
+
+                if (status.is_node_lower_status_available) {
+                    if (status.node_lower_status[v] == IS_status::excluded) {
+                        br_alg->flip_include_exclude_lower(v);
+                    }
+                }
+
                 continue;
             }
 
@@ -629,6 +739,17 @@ bool twin_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
             if (status.weights[v] + status.weights[twin] >= neighbors_weight) {
                 br_alg->set(v, IS_status::included);
                 br_alg->set(twin, IS_status::included);
+
+                // update lower solution
+                if (status.is_node_lower_status_available) {
+                    if (status.node_lower_status[v] == IS_status::excluded) {
+                        br_alg->flip_include_exclude_lower(v);
+                    }
+                    if (status.node_lower_status[twin] == IS_status::excluded) {
+                        br_alg->flip_include_exclude_lower(twin);
+                    }
+                }
+
             } else {
                 fold(br_alg, v, twin);
             }
@@ -652,6 +773,41 @@ void twin_reduction::fold(branch_and_reduce_algorithm* br_alg, NodeID main, Node
 
     br_alg->add_next_level_node(main);
     br_alg->add_next_level_neighborhood(main);
+
+    // update lower solution
+    /*if(status.is_node_lower_status_available) {
+        // it holds main in solution iff. twin in solution
+        ASSERT_TRUE(status.node_lower_status[main] == status.node_lower_status[twin]);
+        NodeID changes = 2;
+        if (status.node_lower_status[main] == IS_status::included) {
+            status.node_lower_status[main] = IS_status::excluded;
+            status.node_lower_status[twin] = IS_status::excluded;
+            std::vector<NodeID> lower_sol_candidates(status.graph[main].size());
+            std::copy(status.graph[main].begin(), status.graph[main].end(), lower_sol_candidates.begin());
+            changes += br_alg->maximize_lower(lower_sol_candidates);
+        } else {
+            status.node_lower_status[main] = IS_status::included;
+            status.node_lower_status[twin] = IS_status::included;
+
+            auto& set_1 = br_alg->set_1;
+            set_1.clear();
+            std::vector<NodeID> lower_sol_candidates;
+            for (auto v : status.graph[main]) {
+                if (status.node_lower_status[v] == IS_status::included) {
+                    status.node_lower_status[v] = IS_status::excluded;
+                    for (auto u : status.graph[main]) {
+                        // u excluded, candidate for lower solution
+                        if (!set_1.get(u)) {
+                            set_1.add(u);
+                            lower_sol_candidates.push_back(u);
+                        }
+                    }
+                }
+            }
+            changes += br_alg->maximize_lower(lower_sol_candidates);
+        }
+        status.modified_lower_queue.push_back(changes);
+    }*/
 }
 
 void twin_reduction::restore(branch_and_reduce_algorithm* br_alg) {
@@ -699,6 +855,14 @@ bool domination_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 
             if (status.weights[v] >= neighbors_weight) {
                 br_alg->set(v, IS_status::included);
+
+                // update lower solution
+                if (status.is_node_lower_status_available) {
+                    if (status.node_lower_status[v] == IS_status::excluded) {
+                        br_alg->flip_include_exclude_lower(v);
+                    }
+                }
+
                 continue;
             }
 
@@ -719,6 +883,13 @@ bool domination_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 
                 if (is_subset && status.weights[neighbor] >= status.weights[v]) {
                     br_alg->set(v, IS_status::excluded);
+
+                    if (status.is_node_lower_status_available) {
+                        if (status.node_lower_status[v] == IS_status::included) {
+                            br_alg->flip_include_exclude_lower(v);
+                        }
+                    }
+
                     break;
                 }
             }
@@ -754,6 +925,14 @@ bool generalized_neighborhood_reduction::reduce(branch_and_reduce_algorithm* br_
 
             if (status.weights[v] >= neighbors_weight) {
                 br_alg->set(v, IS_status::included);
+
+                // update lower solution
+                if (status.is_node_lower_status_available) {
+                    if (status.node_lower_status[v] == IS_status::excluded) {
+                        br_alg->flip_include_exclude_lower(v);
+                    }
+                }
+
                 continue;
             }
             if (status.weights[v] < max_neighbor_weight) {
@@ -778,7 +957,14 @@ bool generalized_neighborhood_reduction::reduce(branch_and_reduce_algorithm* br_
                 continue;
             }
 
-            if (status.weights[v] >= neighborhood_br_alg.get_current_is_weight()) br_alg->set(v, IS_status::included);
+            if (status.weights[v] >= neighborhood_br_alg.get_current_is_weight()) {
+                br_alg->set(v, IS_status::included);
+
+                // update lower solution
+                if (status.node_lower_status[v] == IS_status::excluded) {
+                    br_alg->flip_include_exclude_lower(v);
+                }
+            }
         }
     }
 
@@ -821,6 +1007,14 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 
             if (status.weights[v] >= neighbors_weight) {
                 br_alg->set(v, IS_status::included);
+
+                // update lower solution
+                if (status.is_node_lower_status_available) {
+                    if (status.node_lower_status[v] == IS_status::excluded) {
+                        br_alg->flip_include_exclude_lower(v);
+                    }
+                }
+
                 continue;
             }
 
@@ -848,6 +1042,14 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
             if (status.weights[v] >= MWIS_weight) {
                 // same as in generalized_neighborhood_reduction
                 br_alg->set(v, IS_status::included);
+
+                // update lower solution
+                if (status.is_node_lower_status_available) {
+                    if (status.node_lower_status[v] == IS_status::excluded) {
+                        br_alg->flip_include_exclude_lower(v);
+                    }
+                }
+
                 continue;
             }
 
@@ -951,6 +1153,14 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 
                     if (remove_node) {
                         br_alg->set(node, IS_status::excluded);
+
+                        // update lower solution
+                        if (status.is_node_lower_status_available) {
+                            if (status.node_lower_status[node] == IS_status::included) {
+                                br_alg->flip_include_exclude_lower(node);
+                            }
+                        }
+
                         break;  // break and restart loop because set(..) modifies the range which we currently iterate
                     }
 
@@ -987,10 +1197,17 @@ void generalized_fold_reduction::fold(branch_and_reduce_algorithm* br_alg, NodeI
     data.main_neighbor_list = status.graph[main_node];
 
     for (auto neighbor : data.main_neighbor_list) {
-        if (MWIS_set.get(neighbor))
+        if (MWIS_set.get(neighbor)) {
             nodes.MWIS.push_back(neighbor);
-        else
+        } else {
             br_alg->set(neighbor, IS_status::excluded);
+
+            if (status.is_node_lower_status_available) {
+                if (status.node_lower_status[neighbor] == IS_status::included) {
+                    br_alg->flip_include_exclude_lower(neighbor);
+                }
+            }
+        }
     }
 
     // reverse order because of later "restore_edge_and_replace"
@@ -1031,6 +1248,29 @@ void generalized_fold_reduction::fold(branch_and_reduce_algorithm* br_alg, NodeI
 
     br_alg->add_next_level_node(nodes.main);
     br_alg->add_next_level_neighborhood(nodes.main);
+
+    // update lower solution
+    if (status.is_node_lower_status_available) {
+        // nodes.main is now folded node
+        if (status.node_lower_status[nodes.main] == IS_status::included) {
+            bool is_independent = true;
+            for (auto neighbor : status.graph[nodes.main]) {
+                if (status.node_lower_status[neighbor] == IS_status::included) {
+                    is_independent = false;
+                    break;
+                }
+            }
+
+            if (!is_independent) {
+                // exclude folded node (nodes.main)
+                br_alg->set_lower(nodes.main, IS_status::excluded);
+                status.modified_lower_queue.push_back(1);
+            }
+        } else {
+            // include folded node
+            br_alg->flip_include_exclude_lower(nodes.main);
+        }
+    }
 }
 
 void generalized_fold_reduction::restore(branch_and_reduce_algorithm* br_alg) {

@@ -85,10 +85,14 @@ class branch_and_reduce_algorithm {
         dynamic_graph graph;
         std::vector<NodeWeight> weights;
         std::vector<IS_status> node_status;
+        NodeWeight is_lower_weight;
+        std::vector<IS_status> node_lower_status;
         std::vector<reduction_ptr> reductions;
         sized_vector<reduction_type> folded_queue;
         sized_vector<node_pos> branching_queue;
         sized_vector<NodeID> modified_queue;
+        std::vector<NodeID> modified_lower_queue;
+        bool is_node_lower_status_available;
 
         graph_status() = default;
 
@@ -98,13 +102,38 @@ class branch_and_reduce_algorithm {
               graph(G),
               weights(n, 0),
               node_status(n, IS_status::not_set),
+              is_lower_weight(0),
+              node_lower_status(0),
               folded_queue(n),
               branching_queue(n),
-              modified_queue(n + 1) {
+              modified_queue(n + 1),
+              modified_lower_queue(0),
+              is_node_lower_status_available(false) {
             forall_nodes (G, node) {
                 weights[node] = G.getNodeWeight(node);
             }
             endfor
+        }
+
+        graph_status(graph_access& G, std::vector<IS_status>& node_init_solution, NodeWeight is_init_weight)
+            : n(G.number_of_nodes()),
+              remaining_nodes(n),
+              graph(G),
+              weights(n, 0),
+              node_status(n, IS_status::not_set),
+              is_lower_weight(is_init_weight),
+              node_lower_status(node_init_solution),
+              folded_queue(n),
+              branching_queue(n),
+              modified_queue(n + 1),
+              modified_lower_queue(),
+              is_node_lower_status_available(true) {
+            forall_nodes (G, node) {
+                weights[node] = G.getNodeWeight(node);
+            }
+            endfor
+            // it is possible that a node is multiple times flipped
+            modified_lower_queue.reserve(3*n);
         }
     };
 
@@ -133,6 +162,7 @@ class branch_and_reduce_algorithm {
     NodeWeight best_weight = 0;
     timer t;
     bool is_ils_best_solution = false;
+    bool is_init_best_solution = false;
     size_t active_reduction_index;
     bool timeout = false;
 
@@ -158,17 +188,22 @@ class branch_and_reduce_algorithm {
     // presized onjects for temporary use
     fast_set set_1;
     fast_set set_2;
+    fast_set set_3;
     fast_set double_set;
     sized_vector<sized_vector<NodeID>> buffers;
+    std::vector<IS_status> local_lower_sol;
 
     size_t deg(NodeID node) const;
-    void set(NodeID node, IS_status status, bool push_modified = true);
+    void set_lower(NodeID node, branch_and_reduce_algorithm::IS_status mis_status, bool push_modified = true);
+    void set(NodeID node, IS_status mis_status, bool push_modified = true);
     void unset(NodeID node, bool restore = true);
     void flip_include_exclude(NodeID node);
+    void flip_include_exclude_lower(NodeID node);
 
     void fill_global_greedy();
     void compute_ils_pruning_bound();
     NodeWeight compute_cover_pruning_bound();
+    NodeID maximize_lower(std::vector<NodeID>& nodes);
 
     void init_reduction_step();
     void add_next_level_node(NodeID node);
@@ -184,6 +219,7 @@ class branch_and_reduce_algorithm {
 
     void update_best_solution();
     void reverse_branching();
+    void reverse_lower_modifications();
     void restore_best_local_solution();
     void restore_best_global_solution();
 
@@ -192,11 +228,15 @@ class branch_and_reduce_algorithm {
     void build_induced_subgraph(graph_access& G, const sized_vector<NodeID>& nodes, const fast_set& nodes_set,
                                 sized_vector<NodeID>& reverse_mapping);
 
+    void init_branch_and_reduce_algorithm(bool called_from_fold);
+
     void disable_cout();
     void enable_cout();
 
    public:
     branch_and_reduce_algorithm(graph_access& G, const MISConfig& config, bool called_from_fold = false);
+    branch_and_reduce_algorithm(graph_access& G, std::vector<IS_status>& node_lower_status, NodeWeight is_lower_weight,
+                                const MISConfig& config, bool called_from_fold = false);
 
     void reduce_graph();
     bool run_branch_reduce();

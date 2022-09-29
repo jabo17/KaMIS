@@ -18,9 +18,9 @@
 
 // A custom assertion macro that does not kill the program but prints to
 // stderr instead.  
-//#if (defined(NDEBUG) || defined(SPEEDPROFILING))
+#if (defined(NDEBUG) || defined(SPEEDPROFILING))
 # define ASSERT_TRUE(x) do {} while (false);
-/*#else
+#else
 # define ASSERT_TRUE(expression) \
         do { \
                 if (not (expression)) { \
@@ -28,8 +28,8 @@
                         "]. Asserted: " << STR(expression) << std::endl; \
                         abort(); \
                 } \
-        } while (false)
-#endif*/
+        } while (false);
+#endif
 
 // Assert: left != right.
 //#ifdef NDEBUG
