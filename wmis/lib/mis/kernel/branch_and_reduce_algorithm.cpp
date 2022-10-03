@@ -339,6 +339,24 @@ size_t branch_and_reduce_algorithm::run_ils(const MISConfig& config, graph_acces
     return solution_weight;
 }
 
+size_t branch_and_reduce_algorithm::run_ils_only(const MISConfig& config, graph_access& G, sized_vector<NodeID>& tmp_buffer,
+                                            size_t max_swaps) {
+    //greedy_initial_is(G, tmp_buffer);
+    ils local_search(config);
+    local_search.perform_ils(G, max_swaps);
+
+    size_t solution_weight = 0;
+
+    forall_nodes (G, node) {
+        if (G.getPartitionIndex(node) == 1) {
+            solution_weight += G.getNodeWeight(node);
+        }
+    }
+    endfor
+
+    return solution_weight;
+}
+
 void branch_and_reduce_algorithm::init_reduction_step() {
     if (!status.reductions[active_reduction_index]->has_run) {
         status.reductions[active_reduction_index]->marker.fill_current_ascending(status.n);
@@ -454,7 +472,7 @@ void branch_and_reduce_algorithm::reduce_graph_internal() {
 }
 
 bool branch_and_reduce_algorithm::branch_reduce_recursive() {
-    std::cout << "branch-recursive" << std::endl;
+    //std::cout << "branch-recursive" << std::endl;
     build_graph_access(recursive_graph, recursive_mapping);
     size_t comp_count = strongly_connected_components().strong_components(recursive_graph, recursive_comp_map);
 
@@ -610,11 +628,26 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
             }
 
         } else {
-            std::cout << "ils solution better" << best_weight-status.is_lower_weight << std::endl;
+            std::cout << "ils solution better " << best_weight-status.is_lower_weight << std::endl;
             // do not use initial solution any longer
             status.is_node_lower_status_available = false;
         }
     }
+
+    /*if(is_init_best_solution) {
+        cout_handler::disable_cout();
+
+        auto config_cpy = config;
+        config_cpy.time_limit = config_cpy.time_limit * status.n / total_ils_node_count / 100;
+
+        NodeWeight old_weight = best_weight;
+        best_weight = run_ils_only(config_cpy, *local_graph, buffers[0], 1000);
+
+        cout_handler::enable_cout();
+        std::cout << (get_current_is_weight() + best_weight) << " [" << t.elapsed() << "]" << std::endl;
+        std::cout << "improved by "  << best_weight - old_weight << std::endl;
+    }*/
+
 
     recursive_mapping.resize(status.n, 0);
     recursive_comp_map.resize(status.n, 0);

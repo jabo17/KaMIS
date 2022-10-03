@@ -242,6 +242,7 @@ class branch_and_reduce_algorithm {
     bool run_branch_reduce();
 
     static size_t run_ils(const MISConfig& config, graph_access& G, sized_vector<NodeID>& tmp_buffer, size_t max_swaps);
+    static size_t run_ils_only(const MISConfig& config, graph_access& G, sized_vector<NodeID>& tmp_buffer, size_t max_swaps);
     static void greedy_initial_is(graph_access& G, sized_vector<NodeID>& tmp_buffer);
 
     NodeWeight get_current_is_weight() const;
