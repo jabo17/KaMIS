@@ -583,8 +583,8 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
         return deg(lhs) > deg(rhs) || (deg(lhs) == deg(rhs) && status.weights[lhs] > status.weights[rhs]);
     });
 
-    if (status.n > ILS_SIZE_LIMIT)
-        compute_ils_pruning_bound();
+    //if (status.n > ILS_SIZE_LIMIT)
+    //    compute_ils_pruning_bound();
 
     if (status.is_node_lower_status_available) {
 // sanity check
@@ -617,8 +617,8 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
         }
 #endif
 
-        if (status.is_lower_weight > best_weight) {
-            std::cout << "init solution better: " << status.is_lower_weight - best_weight << std::endl;
+        //if (status.is_lower_weight > best_weight) {
+        //    std::cout << "init solution better: " << status.is_lower_weight - best_weight << std::endl;
             best_weight = status.is_lower_weight;
             is_ils_best_solution = false;
             is_init_best_solution = true;
@@ -629,14 +629,14 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
                 }
             }
 
-        } else {
+        /*} else {
             std::cout << "ils solution better " << best_weight - status.is_lower_weight << std::endl;
             // do not use initial solution any longer
             status.is_node_lower_status_available = false;
-        }
-    }/*else if (status.n > ILS_SIZE_LIMIT) {
+        }*/
+    }else if (status.n > ILS_SIZE_LIMIT) {
         compute_ils_pruning_bound();
-    }*/
+    }
 
     /*if(is_init_best_solution) {
         cout_handler::disable_cout();
