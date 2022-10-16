@@ -157,6 +157,9 @@ class branch_and_reduce_algorithm {
     // max number of nodes to use all reductions during branch reduce
     static constexpr size_t FULL_REDUCTIONS_RECURSION_LIMIT = 50;
 
+    // max length of non-improving sequence of branching steps for a single component
+    static constexpr size_t MAX_LEN_NON_IMPR_SEQ = 20;
+
     MISConfig config;
     graph_status best_solution_status;
     NodeWeight best_weight = 0;
@@ -165,6 +168,7 @@ class branch_and_reduce_algorithm {
     bool is_init_best_solution = false;
     size_t active_reduction_index;
     bool timeout = false;
+    size_t len_non_impr_seq = 0;
 
     graph_status global_status;
     graph_access global_graph;

@@ -27,13 +27,13 @@ bool neighborhood_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
             }
 
             if (status.weights[v] >= neighbor_weights) {
-                std::cout << status.graph[v].size() << std::endl;
+                // std::cout << status.graph[v].size() << std::endl;
                 br_alg->set(v, IS_status::included);
 
                 // update lower solution
                 if (status.is_node_lower_status_available) {
                     if (status.node_lower_status[v] == IS_status::excluded) {
-                        std::cout << status.graph[v].size() << std::endl;
+                        // std::cout << status.graph[v].size() << std::endl;
                         br_alg->flip_include_exclude_lower(v);
                     }
                 }

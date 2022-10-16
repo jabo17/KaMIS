@@ -559,6 +559,7 @@ bool branch_and_reduce_algorithm::branch_reduce_recursive() {
 
 void branch_and_reduce_algorithm::branch_reduce_single_component() {
     best_weight = 0;
+    len_non_impr_seq = 0;
 
     if (status.n == 0) {
         return;
@@ -582,7 +583,8 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
         return deg(lhs) > deg(rhs) || (deg(lhs) == deg(rhs) && status.weights[lhs] > status.weights[rhs]);
     });
 
-    if (status.n > ILS_SIZE_LIMIT) compute_ils_pruning_bound();
+    if (status.n > ILS_SIZE_LIMIT)
+        compute_ils_pruning_bound();
 
     if (status.is_node_lower_status_available) {
 // sanity check
@@ -616,7 +618,7 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
 #endif
 
         if (status.is_lower_weight > best_weight) {
-            std::cout << "init solution better: " << status.is_lower_weight-best_weight << std::endl;
+            std::cout << "init solution better: " << status.is_lower_weight - best_weight << std::endl;
             best_weight = status.is_lower_weight;
             is_ils_best_solution = false;
             is_init_best_solution = true;
@@ -628,11 +630,13 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
             }
 
         } else {
-            std::cout << "ils solution better " << best_weight-status.is_lower_weight << std::endl;
+            std::cout << "ils solution better " << best_weight - status.is_lower_weight << std::endl;
             // do not use initial solution any longer
             status.is_node_lower_status_available = false;
         }
-    }
+    }/*else if (status.n > ILS_SIZE_LIMIT) {
+        compute_ils_pruning_bound();
+    }*/
 
     /*if(is_init_best_solution) {
         cout_handler::disable_cout();
@@ -648,7 +652,6 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
         std::cout << "improved by "  << best_weight - old_weight << std::endl;
     }*/
 
-
     recursive_mapping.resize(status.n, 0);
     recursive_comp_map.resize(status.n, 0);
 
@@ -658,6 +661,11 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
             timeout = true;
             break;
         }
+
+        /*if(len_non_impr_seq >= MAX_LEN_NON_IMPR_SEQ && best_weight != 0) {
+            // timeout = true;
+            break;
+        }*/
 
         NodeID branch_node = node_order[i];
 
@@ -677,8 +685,17 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
             continue;
         }
 
-        bool improvement_possible =
-            status.is_weight + status.reduction_offset + compute_cover_pruning_bound() > best_weight;
+        bool improvement_possible = false;
+
+        // upper bound can be more tight
+        /*if(!status.branching_queue.empty() &&
+            status.branching_queue.back().node == branch_node &&
+            status.node_status[branch_node] == IS_status::included) {
+            improvement_possible = status.is_weight + status.reduction_offset + compute_cover_pruning_bound() - status.weights[branch_node] > best_weight;
+        }else {
+            improvement_possible = status.is_weight + status.reduction_offset + compute_cover_pruning_bound() > best_weight;
+        }*/
+        improvement_possible = status.is_weight + status.reduction_offset + compute_cover_pruning_bound() > best_weight;
 
         if (improvement_possible && status.node_status[branch_node] == IS_status::not_set) {
             // first time reaching this node in this branch
@@ -697,7 +714,6 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
         } else if (improvement_possible && !status.branching_queue.empty() &&
                    status.branching_queue.back().node == branch_node) {
             if (status.node_status[branch_node] == IS_status::included) {
-
                 // second time reaching this node in this branch
                 flip_include_exclude(branch_node);
 
@@ -722,6 +738,7 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
                 continue;
             }
         } else if (!improvement_possible) {
+            ++len_non_impr_seq;
             if (!status.branching_queue.empty() && status.branching_queue.back().node == branch_node) {
                 status.branching_queue.pop_back();
                 unset(branch_node);
@@ -763,6 +780,7 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
     }
 
     restore_best_local_solution();
+    std::cout << "len_non_impr_seq: " << len_non_impr_seq << ", n: " << status.n << ", kor: " << (static_cast<double>(len_non_impr_seq) / status.n) << std::endl;
 }
 
 bool branch_and_reduce_algorithm::run_branch_reduce() {
@@ -872,8 +890,12 @@ void branch_and_reduce_algorithm::update_best_solution() {
         best_weight = current_weight;
         is_ils_best_solution = false;
         is_init_best_solution = false;
+        std::cout << "impr len_non_impr_seq: " << len_non_impr_seq << ", n: " << status.n << ", kor: " << (static_cast<double>(len_non_impr_seq) / status.n) << std::endl;
+        len_non_impr_seq = 0;
 
         std::cout << (get_current_is_weight() + current_weight) << " [" << t.elapsed() << "]" << std::endl;
+    }else{
+        ++len_non_impr_seq;
     }
 }
 
