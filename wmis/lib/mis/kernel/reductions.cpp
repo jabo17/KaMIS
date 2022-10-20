@@ -952,6 +952,19 @@ bool generalized_neighborhood_reduction::reduce(branch_and_reduce_algorithm* br_
             br_alg->build_induced_neighborhood_subgraph(neighborhood_graph, v);
             branch_and_reduce_algorithm neighborhood_br_alg(neighborhood_graph, config, true);
 
+            if(status.is_node_lower_status_available) {
+                auto &neighbors = status.graph[v];
+                NodeWeight init_weight = 0;
+                auto& neighborhood_sol_indicator = br_alg->sol_buffer;
+                for(NodeID node = 0; node < neighborhood_graph.number_of_nodes(); ++node) {
+                    neighborhood_sol_indicator[node] = status.node_lower_status[neighbors[node]];
+                    if(neighborhood_sol_indicator[node] == IS_status::included) {
+                        init_weight += neighborhood_graph.getNodeWeight(node);
+                    }
+                }
+                neighborhood_br_alg.set_init_sol(neighborhood_sol_indicator, init_weight);
+            }
+
             if (!neighborhood_br_alg.run_branch_reduce()) {
                 std::cerr << "%generalized_neighborhood_reduction br_call time out" << std::endl;
                 continue;
@@ -1029,7 +1042,20 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
             config.time_limit = status.graph[v].size() / 10.0;
 
             br_alg->build_induced_subgraph(neighborhood_graph, neighbors, neighbors_set, reverse_mapping);
+
             branch_and_reduce_algorithm neighborhood_br_alg(neighborhood_graph, config, true);
+
+            if(status.is_node_lower_status_available) {
+                NodeWeight init_weight = 0;
+                auto& neighborhood_sol_indicator = br_alg->sol_buffer;
+                for(NodeID node = 0; node < neighborhood_graph.number_of_nodes(); ++node) {
+                    neighborhood_sol_indicator[node] = status.node_lower_status[neighbors[node]];
+                    if(neighborhood_sol_indicator[node] == IS_status::included) {
+                        init_weight += neighborhood_graph.getNodeWeight(node);
+                    }
+                }
+                neighborhood_br_alg.set_init_sol(neighborhood_sol_indicator, init_weight);
+            }
 
             if (!neighborhood_br_alg.run_branch_reduce()) {
                 std::cerr << "%generalized_fold_reduction br_call time out" << std::endl;
@@ -1084,6 +1110,18 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
                 br_alg->build_induced_subgraph(neighborhood_graph, neighbors, neighbors_set, reverse_mapping);
                 branch_and_reduce_algorithm neighborhood_br_alg(neighborhood_graph, config, true);
 
+                if(status.is_node_lower_status_available) {
+                    NodeWeight init_weight = 0;
+                    auto& neighborhood_sol_indicator = br_alg->sol_buffer;
+                    for(NodeID node = 0; node < neighborhood_graph.number_of_nodes(); ++node) {
+                        neighborhood_sol_indicator[node] = status.node_lower_status[neighbors[node]];
+                        if(neighborhood_sol_indicator[node] == IS_status::included) {
+                            init_weight += neighborhood_graph.getNodeWeight(node);
+                        }
+                    }
+                    neighborhood_br_alg.set_init_sol(neighborhood_sol_indicator, init_weight);
+                }
+
                 if (!neighborhood_br_alg.run_branch_reduce()) {
                     std::cerr << "%generalized_fold_reduction br_call loop time out" << std::endl;
                     check_failed = true;
@@ -1133,6 +1171,18 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 
                     config.time_limit = neighbors.size() / 10.0;
                     branch_and_reduce_algorithm neighborhood_br_alg(neighborhood_graph, config, true);
+
+                    if(status.is_node_lower_status_available) {
+                        NodeWeight init_weight = 0;
+                        auto& neighborhood_sol_indicator = br_alg->sol_buffer;
+                        for(NodeID node = 0; node < neighborhood_graph.number_of_nodes(); ++node) {
+                            neighborhood_sol_indicator[node] = status.node_lower_status[neighbors[node]];
+                            if(neighborhood_sol_indicator[node] == IS_status::included) {
+                                init_weight += neighborhood_graph.getNodeWeight(node);
+                            }
+                        }
+                        neighborhood_br_alg.set_init_sol(neighborhood_sol_indicator, init_weight);
+                    }
 
                     if (!neighborhood_br_alg.run_branch_reduce()) {
                         std::cerr << "%generalized_fold_reduction br_call loop time out" << std::endl;

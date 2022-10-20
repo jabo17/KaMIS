@@ -87,8 +87,15 @@ branch_and_reduce_algorithm::branch_and_reduce_algorithm(graph_access& G, std::v
       set_3(global_status.n),
       double_set(global_status.n * 2),
       buffers(2, sized_vector<NodeID>(global_status.n)),
+      sol_buffer(global_status.n, IS_status::excluded),
       local_lower_sol(global_status.n) {
     init_branch_and_reduce_algorithm(called_from_fold);
+}
+
+void branch_and_reduce_algorithm::set_init_sol(std::vector<IS_status>& node_lower_status, NodeWeight is_lower_weight) {
+    sol_buffer.resize(global_status.n);
+    local_lower_sol.resize(global_status.n);
+    global_status.set_init_sol(node_lower_status, is_lower_weight);
 }
 
 size_t branch_and_reduce_algorithm::deg(NodeID node) const { return status.graph[node].size(); }
@@ -339,9 +346,9 @@ size_t branch_and_reduce_algorithm::run_ils(const MISConfig& config, graph_acces
     return solution_weight;
 }
 
-size_t branch_and_reduce_algorithm::run_ils_only(const MISConfig& config, graph_access& G, sized_vector<NodeID>& tmp_buffer,
-                                            size_t max_swaps) {
-    //greedy_initial_is(G, tmp_buffer);
+size_t branch_and_reduce_algorithm::run_ils_only(const MISConfig& config, graph_access& G,
+                                                 sized_vector<NodeID>& tmp_buffer, size_t max_swaps) {
+    // greedy_initial_is(G, tmp_buffer);
     ils local_search(config);
     local_search.perform_ils(G, max_swaps);
 
@@ -472,7 +479,7 @@ void branch_and_reduce_algorithm::reduce_graph_internal() {
 }
 
 bool branch_and_reduce_algorithm::branch_reduce_recursive() {
-    //std::cout << "branch-recursive" << std::endl;
+    // std::cout << "branch-recursive" << std::endl;
     build_graph_access(recursive_graph, recursive_mapping);
     size_t comp_count = strongly_connected_components().strong_components(recursive_graph, recursive_comp_map);
 
@@ -483,7 +490,7 @@ bool branch_and_reduce_algorithm::branch_reduce_recursive() {
 
     ASSERT_TRUE(is_token(status.modified_queue.back()));
     status.modified_queue.pop_back();
-    if(status.is_node_lower_status_available) {
+    if (status.is_node_lower_status_available) {
         status.modified_lower_queue.pop_back();
     }
 
@@ -583,8 +590,9 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
         return deg(lhs) > deg(rhs) || (deg(lhs) == deg(rhs) && status.weights[lhs] > status.weights[rhs]);
     });
 
-    //if (status.n > ILS_SIZE_LIMIT)
-    //    compute_ils_pruning_bound();
+    if (status.n > ILS_SIZE_LIMIT) {
+        compute_ils_pruning_bound();
+    }
 
     if (status.is_node_lower_status_available) {
 // sanity check
@@ -617,8 +625,8 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
         }
 #endif
 
-        //if (status.is_lower_weight > best_weight) {
-        //    std::cout << "init solution better: " << status.is_lower_weight - best_weight << std::endl;
+        if (status.is_lower_weight > best_weight) {
+            std::cout << "init solution better: " << status.is_lower_weight - best_weight << std::endl;
             best_weight = status.is_lower_weight;
             is_ils_best_solution = false;
             is_init_best_solution = true;
@@ -629,14 +637,21 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
                 }
             }
 
-        /*} else {
+            if(status.n <= ILS_SIZE_LIMIT) {
+                status.is_node_lower_status_available = false;
+            }
+        } else if (status.is_lower_weight == best_weight) {
+            std::cout << "init equals best" << std::endl;
+            is_init_best_solution = true;
+            is_ils_best_solution = false;
+        } else {
             std::cout << "ils solution better " << best_weight - status.is_lower_weight << std::endl;
             // do not use initial solution any longer
             status.is_node_lower_status_available = false;
-        }*/
-    }else if (status.n > ILS_SIZE_LIMIT) {
-        compute_ils_pruning_bound();
-    }
+        }
+    } /*else if (status.n > ILS_SIZE_LIMIT) {
+         compute_ils_pruning_bound();
+     }*/
 
     /*if(is_init_best_solution) {
         cout_handler::disable_cout();
@@ -662,10 +677,10 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
             break;
         }
 
-        /*if(len_non_impr_seq >= MAX_LEN_NON_IMPR_SEQ && best_weight != 0) {
+        if(len_non_impr_seq >= MAX_LEN_NON_IMPR_SEQ && best_weight != 0) {
             // timeout = true;
             break;
-        }*/
+        }
 
         NodeID branch_node = node_order[i];
 
@@ -691,9 +706,9 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
         /*if(!status.branching_queue.empty() &&
             status.branching_queue.back().node == branch_node &&
             status.node_status[branch_node] == IS_status::included) {
-            improvement_possible = status.is_weight + status.reduction_offset + compute_cover_pruning_bound() - status.weights[branch_node] > best_weight;
-        }else {
-            improvement_possible = status.is_weight + status.reduction_offset + compute_cover_pruning_bound() > best_weight;
+            improvement_possible = status.is_weight + status.reduction_offset + compute_cover_pruning_bound() -
+        status.weights[branch_node] > best_weight; }else { improvement_possible = status.is_weight +
+        status.reduction_offset + compute_cover_pruning_bound() > best_weight;
         }*/
         improvement_possible = status.is_weight + status.reduction_offset + compute_cover_pruning_bound() > best_weight;
 
@@ -738,11 +753,12 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
                 continue;
             }
         } else if (!improvement_possible) {
-            ++len_non_impr_seq;
             if (!status.branching_queue.empty() && status.branching_queue.back().node == branch_node) {
                 status.branching_queue.pop_back();
                 unset(branch_node);
                 // if (i == 0) break;
+            }else {
+                ++len_non_impr_seq;
             }
             // bug-fix: added case: if improvement not possible in the beginning, do not perform any branching at all
             // still covering case: first branch is not improving (line 698)
@@ -780,11 +796,29 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
     }
 
     restore_best_local_solution();
-    std::cout << "len_non_impr_seq: " << len_non_impr_seq << ", n: " << status.n << ", kor: " << (static_cast<double>(len_non_impr_seq) / status.n) << std::endl;
+    std::cout << "len_non_impr_seq: " << len_non_impr_seq << ", n: " << status.n
+              << ", kor: " << (static_cast<double>(len_non_impr_seq) / status.n) << std::endl;
 }
 
 bool branch_and_reduce_algorithm::run_branch_reduce() {
     t.restart();
+
+    /*if(global_status.is_node_lower_status_available) {
+        buffers.resize(7, sized_vector<NodeID>(global_status.n));
+        status = std::move(global_status);
+        double t_bound = t.elapsed();
+        bool improvement_possible = compute_cover_pruning_bound() > status.is_lower_weight;
+
+        if(!improvement_possible) {
+            std::cout << "global: no improvement possible: " << t.elapsed()-t_bound << std::endl;
+            std::copy(status.node_lower_status.begin(), status.node_lower_status.end(), status.node_status.begin());
+            status.is_weight = status.is_lower_weight;
+            return true;
+        }
+        global_status = std::move(status);
+
+    }*/
+
     initial_reduce();
 
     // std::cout << "%reduction_nodes " << global_status.remaining_nodes << "\n";
@@ -890,11 +924,12 @@ void branch_and_reduce_algorithm::update_best_solution() {
         best_weight = current_weight;
         is_ils_best_solution = false;
         is_init_best_solution = false;
-        std::cout << "impr len_non_impr_seq: " << len_non_impr_seq << ", n: " << status.n << ", kor: " << (static_cast<double>(len_non_impr_seq) / status.n) << std::endl;
+        std::cout << "impr len_non_impr_seq: " << len_non_impr_seq << ", n: " << status.n
+                  << ", kor: " << (static_cast<double>(len_non_impr_seq) / status.n) << std::endl;
         len_non_impr_seq = 0;
 
         std::cout << (get_current_is_weight() + current_weight) << " [" << t.elapsed() << "]" << std::endl;
-    }else{
+    } else {
         ++len_non_impr_seq;
     }
 }
@@ -1178,7 +1213,7 @@ void branch_and_reduce_algorithm::flip_include_exclude_lower(NodeID node) {
         set_3.clear();
         // TODO would be nice to reserve space
         std::vector<NodeID> lower_solution_candidates;
-        for(auto neighbor : status.graph[node]) {
+        for (auto neighbor : status.graph[node]) {
             // block neighbors of v; v itself cannot be reached from a neighbor (v was hidden before neighbor)
             set_3.add(neighbor);
         }

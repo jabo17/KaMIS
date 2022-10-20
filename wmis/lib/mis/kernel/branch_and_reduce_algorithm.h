@@ -37,11 +37,11 @@ class cout_handler {
     static void disable_cout() {
         disable_count++;
 
-        if (disable_count == 1) {
+        /*if (disable_count == 1) {
             buffered_output.str(std::string());
             buffered_output.clear();
             std::cout.rdbuf(buffered_output.rdbuf());
-        }
+        }*/
     }
 
     static void enable_cout() {
@@ -49,7 +49,7 @@ class cout_handler {
 
         disable_count--;
 
-        if (disable_count == 0) std::cout.rdbuf(cout_rdbuf_backup);
+        //if (disable_count == 0) std::cout.rdbuf(cout_rdbuf_backup);
     }
 };
 
@@ -135,6 +135,12 @@ class branch_and_reduce_algorithm {
             // it is possible that a node is multiple times flipped
             modified_lower_queue.reserve(3*n);
         }
+
+        void set_init_sol(std::vector<IS_status>& node_init_solution, NodeWeight is_init_weight) {
+            is_node_lower_status_available = true;
+            node_lower_status = node_init_solution;
+            is_lower_weight = is_init_weight;
+        }
     };
 
     static constexpr NodeID BRANCHING_TOKEN = std::numeric_limits<NodeID>::max();
@@ -158,7 +164,7 @@ class branch_and_reduce_algorithm {
     static constexpr size_t FULL_REDUCTIONS_RECURSION_LIMIT = 50;
 
     // max length of non-improving sequence of branching steps for a single component
-    static constexpr size_t MAX_LEN_NON_IMPR_SEQ = 20;
+    static constexpr size_t MAX_LEN_NON_IMPR_SEQ = 2;
 
     MISConfig config;
     graph_status best_solution_status;
@@ -195,6 +201,7 @@ class branch_and_reduce_algorithm {
     fast_set set_3;
     fast_set double_set;
     sized_vector<sized_vector<NodeID>> buffers;
+    std::vector<IS_status> sol_buffer;
     std::vector<IS_status> local_lower_sol;
 
     size_t deg(NodeID node) const;
@@ -241,6 +248,8 @@ class branch_and_reduce_algorithm {
     branch_and_reduce_algorithm(graph_access& G, const MISConfig& config, bool called_from_fold = false);
     branch_and_reduce_algorithm(graph_access& G, std::vector<IS_status>& node_lower_status, NodeWeight is_lower_weight,
                                 const MISConfig& config, bool called_from_fold = false);
+
+    void set_init_sol(std::vector<IS_status>& node_lower_status, NodeWeight is_lower_weight);
 
     void reduce_graph();
     bool run_branch_reduce();
