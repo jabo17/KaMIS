@@ -1205,6 +1205,68 @@ NodeID branch_and_reduce_algorithm::maximize_lower(std::vector<NodeID>& nodes) {
     return changes;
 }
 
+void branch_and_reduce_algorithm::maximize_init() {
+
+    status = std::move(global_status); // set_lower operates over status
+
+    std::vector<NodeID> nodes;
+    nodes.reserve(status.n);
+    for(NodeID node = 0; node < status.n; ++node) {
+        if(status.node_lower_status[node] == IS_status::excluded) {
+            nodes.push_back(node);
+        }
+    }
+    std::sort(nodes.begin(), nodes.end(),
+              [&w = status.weights](const NodeID first, const NodeID second) { return w[first] > w[second]; });
+
+    // maximize
+    for (auto v : nodes) {
+        ASSERT_TRUE(status.node_lower_status[v] == IS_status::excluded);
+        bool add_node = true;
+        for (auto u : status.graph[v]) {
+            if (status.node_lower_status[u] == IS_status::included) {
+                add_node = false;
+                break;
+            }
+        }
+        if (add_node) {
+            // std::cout << "v: " << v << std::endl;
+            set_lower(v, IS_status::included, false);
+        }
+    }
+
+#ifndef NDEBUG
+    if (status.is_node_lower_status_available) {
+        for (NodeID node = 0; node < status.graph.size(); ++node) {
+            if (status.node_status[node] == IS_status::not_set) {
+                if (status.node_lower_status[node] == IS_status::excluded) {
+                    bool found_sol_neighbor = false;
+                    for (auto target : status.graph[node]) {
+                        if (status.node_lower_status[target] == IS_status::included) {
+                            found_sol_neighbor = true;
+                            break;
+                        }
+                    }
+                    if (!found_sol_neighbor) {
+                        //std::cout << "v: " << node << std::endl;
+                        throw std::invalid_argument(std::string("not maximal"));
+                    }
+                } else {
+                    for (auto target : status.graph[node]) {
+                        if (status.node_lower_status[target] == IS_status::included) {
+                            throw std::invalid_argument(std::string("not independent"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+#endif
+
+    global_status = std::move(status);
+
+}
+
 void branch_and_reduce_algorithm::flip_include_exclude_lower(NodeID node) {
     NodeID changes = 1;
     if (status.node_lower_status[node] == IS_status::excluded) {

@@ -952,7 +952,7 @@ bool generalized_neighborhood_reduction::reduce(branch_and_reduce_algorithm* br_
             br_alg->build_induced_neighborhood_subgraph(neighborhood_graph, v);
             branch_and_reduce_algorithm neighborhood_br_alg(neighborhood_graph, config, true);
 
-            if(status.is_node_lower_status_available) {
+            if(status.is_node_lower_status_available && status.node_lower_status[v] == IS_status::excluded) {
                 auto &neighbors = status.graph[v];
                 NodeWeight init_weight = 0;
                 auto& neighborhood_sol_indicator = br_alg->sol_buffer;
@@ -962,7 +962,10 @@ bool generalized_neighborhood_reduction::reduce(branch_and_reduce_algorithm* br_
                         init_weight += neighborhood_graph.getNodeWeight(node);
                     }
                 }
-                neighborhood_br_alg.set_init_sol(neighborhood_sol_indicator, init_weight);
+                if(init_weight > 0) {
+                    neighborhood_br_alg.set_init_sol(neighborhood_sol_indicator, init_weight);
+                    neighborhood_br_alg.maximize_init();
+                }
             }
 
             if (!neighborhood_br_alg.run_branch_reduce()) {
@@ -1045,16 +1048,20 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 
             branch_and_reduce_algorithm neighborhood_br_alg(neighborhood_graph, config, true);
 
-            if(status.is_node_lower_status_available) {
+            if(status.is_node_lower_status_available && status.node_lower_status[v] == IS_status::excluded) {
                 NodeWeight init_weight = 0;
                 auto& neighborhood_sol_indicator = br_alg->sol_buffer;
                 for(NodeID node = 0; node < neighborhood_graph.number_of_nodes(); ++node) {
+                    ASSERT_TRUE(reverse_mapping[neighbors[node]] == node);
                     neighborhood_sol_indicator[node] = status.node_lower_status[neighbors[node]];
                     if(neighborhood_sol_indicator[node] == IS_status::included) {
                         init_weight += neighborhood_graph.getNodeWeight(node);
                     }
                 }
-                neighborhood_br_alg.set_init_sol(neighborhood_sol_indicator, init_weight);
+                if(init_weight > 0) {
+                    neighborhood_br_alg.set_init_sol(neighborhood_sol_indicator, init_weight);
+                    neighborhood_br_alg.maximize_init();
+                }
             }
 
             if (!neighborhood_br_alg.run_branch_reduce()) {
@@ -1110,7 +1117,7 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
                 br_alg->build_induced_subgraph(neighborhood_graph, neighbors, neighbors_set, reverse_mapping);
                 branch_and_reduce_algorithm neighborhood_br_alg(neighborhood_graph, config, true);
 
-                if(status.is_node_lower_status_available) {
+                if(status.is_node_lower_status_available && status.node_lower_status[v] == IS_status::excluded) {
                     NodeWeight init_weight = 0;
                     auto& neighborhood_sol_indicator = br_alg->sol_buffer;
                     for(NodeID node = 0; node < neighborhood_graph.number_of_nodes(); ++node) {
@@ -1119,7 +1126,10 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
                             init_weight += neighborhood_graph.getNodeWeight(node);
                         }
                     }
-                    neighborhood_br_alg.set_init_sol(neighborhood_sol_indicator, init_weight);
+                    if(init_weight > 0) {
+                        neighborhood_br_alg.set_init_sol(neighborhood_sol_indicator, init_weight);
+                        neighborhood_br_alg.maximize_init();
+                    }
                 }
 
                 if (!neighborhood_br_alg.run_branch_reduce()) {
@@ -1172,16 +1182,19 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
                     config.time_limit = neighbors.size() / 10.0;
                     branch_and_reduce_algorithm neighborhood_br_alg(neighborhood_graph, config, true);
 
-                    if(status.is_node_lower_status_available) {
+                    if(status.is_node_lower_status_available && status.node_lower_status[node] == IS_status::excluded) {
                         NodeWeight init_weight = 0;
                         auto& neighborhood_sol_indicator = br_alg->sol_buffer;
-                        for(NodeID node = 0; node < neighborhood_graph.number_of_nodes(); ++node) {
-                            neighborhood_sol_indicator[node] = status.node_lower_status[neighbors[node]];
-                            if(neighborhood_sol_indicator[node] == IS_status::included) {
-                                init_weight += neighborhood_graph.getNodeWeight(node);
+                        for(NodeID u = 0; u < neighborhood_graph.number_of_nodes(); ++u) {
+                            neighborhood_sol_indicator[u] = status.node_lower_status[neighbors[u]];
+                            if(neighborhood_sol_indicator[u] == IS_status::included) {
+                                init_weight += neighborhood_graph.getNodeWeight(u);
                             }
                         }
-                        neighborhood_br_alg.set_init_sol(neighborhood_sol_indicator, init_weight);
+                        if(init_weight > 0) {
+                            neighborhood_br_alg.set_init_sol(neighborhood_sol_indicator, init_weight);
+                            neighborhood_br_alg.maximize_init();
+                        }
                     }
 
                     if (!neighborhood_br_alg.run_branch_reduce()) {

@@ -250,6 +250,7 @@ class branch_and_reduce_algorithm {
                                 const MISConfig& config, bool called_from_fold = false);
 
     void set_init_sol(std::vector<IS_status>& node_lower_status, NodeWeight is_lower_weight);
+    void maximize_init();
 
     void reduce_graph();
     bool run_branch_reduce();
