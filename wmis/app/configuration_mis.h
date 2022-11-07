@@ -33,6 +33,7 @@ class configuration_mis {
 inline void configuration_mis::standard( MISConfig & mis_config ) {
     // Basic
     mis_config.time_limit                             = 1000.0;
+    mis_config.max_length_non_impr_seq                = std::numeric_limits<size_t>::max();
     // Randomization
     mis_config.seed                                   = 0;
     // Output

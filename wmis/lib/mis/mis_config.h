@@ -51,6 +51,9 @@ struct MISConfig {
     // Choose reduction order and amount for given graph type
     Reduction_Style reduction_style;
 
+    // Maximum number of non-improving solution (leaves) during branching since last improving solution (leaf)
+    size_t max_length_non_impr_seq;
+
 
     void setReductionStyle(const std::string & redu_style) {
         if (strCompare(redu_style, "normal") || strCompare(redu_style, "sparse")) {

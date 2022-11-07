@@ -348,6 +348,7 @@ void fold2_reduction::fold(branch_and_reduce_algorithm* br_alg, const fold_nodes
     restore_vec.push_back({nodes, status.weights[nodes.main], status.graph[nodes.main], {}});
 
     status.reduction_offset += status.weights[nodes.main];
+    status.decr_lower_weight(status.weights[nodes.main]);
     status.weights[nodes.main] =
         status.weights[nodes.rest[0]] + status.weights[nodes.rest[1]] - status.weights[nodes.main];
 
@@ -390,6 +391,9 @@ void fold2_reduction::restore(branch_and_reduce_algorithm* br_alg) {
 
     status.weights[data.nodes.main] = data.main_weight;
     status.reduction_offset -= data.main_weight;
+    if(status.use_lower_weight) {
+        status.lower_weight += data.main_weight;
+    }
 
     restore_vec.pop_back();
 }
@@ -520,6 +524,7 @@ void clique_reduction::fold(branch_and_reduce_algorithm* br_alg, const weighted_
 
     br_alg->set(isolated.node, IS_status::folded);
     status.reduction_offset += isolated.weight;
+    status.decr_lower_weight(isolated.weight);
 
     for (auto node : non_isolated) {
         status.weights[node] -= isolated.weight;
@@ -538,6 +543,9 @@ void clique_reduction::restore(branch_and_reduce_algorithm* br_alg) {
 
     br_alg->unset(data.isolated.node);
     status.reduction_offset -= data.isolated.weight;
+    if(status.use_lower_weight) {
+        status.lower_weight += data.isolated.weight;
+    }
 
     for (auto node : data.non_isolated) {
         status.weights[node] += data.isolated.weight;
@@ -676,6 +684,7 @@ void twin_reduction::apply(branch_and_reduce_algorithm* br_alg) {
     } else {
         status.node_status[twin] = IS_status::excluded;
     }
+
 }
 
 bool domination_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
@@ -770,6 +779,7 @@ bool generalized_neighborhood_reduction::reduce(branch_and_reduce_algorithm* br_
 
             // compute MWIS in N(v)
             config.time_limit = status.graph[v].size() / 10.0;
+            config.max_length_non_impr_seq = std::numeric_limits<size_t>::max();
             br_alg->build_induced_neighborhood_subgraph(neighborhood_graph, v);
             branch_and_reduce_algorithm neighborhood_br_alg(neighborhood_graph, config, true);
 
@@ -833,6 +843,7 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 
             // compute MWIS in N(v)
             config.time_limit = status.graph[v].size() / 10.0;
+            config.max_length_non_impr_seq = std::numeric_limits<size_t>::max();
 
             br_alg->build_induced_subgraph(neighborhood_graph, neighbors, neighbors_set, reverse_mapping);
             branch_and_reduce_algorithm neighborhood_br_alg(neighborhood_graph, config, true);
@@ -930,6 +941,7 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
                     br_alg->build_induced_subgraph(neighborhood_graph, neighbors, neighbors_set, reverse_mapping);
 
                     config.time_limit = neighbors.size() / 10.0;
+                    config.max_length_non_impr_seq = std::numeric_limits<size_t>::max();
                     branch_and_reduce_algorithm neighborhood_br_alg(neighborhood_graph, config, true);
 
                     if (!neighborhood_br_alg.run_branch_reduce()) {
@@ -1004,6 +1016,7 @@ void generalized_fold_reduction::fold(branch_and_reduce_algorithm* br_alg, NodeI
 
     // "move" weight into redu offset
     status.reduction_offset += data.main_weight;
+    status.decr_lower_weight(data.main_weight);
 
     status.weights[nodes.main] = MWIS_weight - data.main_weight;
 
@@ -1051,6 +1064,9 @@ void generalized_fold_reduction::restore(branch_and_reduce_algorithm* br_alg) {
 
     status.weights[data.nodes.main] = data.main_weight;
     status.reduction_offset -= data.main_weight;
+    if(status.use_lower_weight) {
+        status.lower_weight += data.main_weight;
+    }
 
     restore_vec.pop_back();
 }

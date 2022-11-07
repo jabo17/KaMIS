@@ -37,11 +37,11 @@ class cout_handler {
     static void disable_cout() {
         disable_count++;
 
-        if (disable_count == 1) {
+        /*if (disable_count == 1) {
             buffered_output.str(std::string());
             buffered_output.clear();
             std::cout.rdbuf(buffered_output.rdbuf());
-        }
+        }*/
     }
 
     static void enable_cout() {
@@ -49,7 +49,7 @@ class cout_handler {
 
         disable_count--;
 
-        if (disable_count == 0) std::cout.rdbuf(cout_rdbuf_backup);
+        //if (disable_count == 0) std::cout.rdbuf(cout_rdbuf_backup);
     }
 };
 
@@ -89,6 +89,8 @@ class branch_and_reduce_algorithm {
         sized_vector<reduction_type> folded_queue;
         sized_vector<node_pos> branching_queue;
         sized_vector<NodeID> modified_queue;
+        NodeWeight lower_weight = 0;
+        bool use_lower_weight = false;
 
         graph_status() = default;
 
@@ -106,6 +108,18 @@ class branch_and_reduce_algorithm {
             }
             endfor
         }
+
+        void decr_lower_weight(NodeWeight weight) {
+            if(use_lower_weight) {
+                if(lower_weight > weight) {
+                    lower_weight -= weight;
+                }else {
+                    lower_weight = 0;
+                    use_lower_weight = false;
+                }
+            }
+        }
+
     };
 
     static constexpr NodeID BRANCHING_TOKEN = std::numeric_limits<NodeID>::max();
@@ -133,8 +147,12 @@ class branch_and_reduce_algorithm {
     NodeWeight best_weight = 0;
     timer t;
     bool is_ils_best_solution = false;
+    bool is_init_best_solution = false;
     size_t active_reduction_index;
     bool timeout = false;
+
+    // branching limit
+    size_t length_non_impr_seq;
 
     graph_status global_status;
     graph_access global_graph;
@@ -183,6 +201,7 @@ class branch_and_reduce_algorithm {
     void initial_reduce();
 
     void update_best_solution();
+    void update_best_solution_at_leaf();
     void reverse_branching();
     void restore_best_local_solution();
     void restore_best_global_solution();
@@ -196,10 +215,18 @@ class branch_and_reduce_algorithm {
     void enable_cout();
 
    public:
-    branch_and_reduce_algorithm(graph_access& G, const MISConfig& config, bool called_from_fold = false);
+    branch_and_reduce_algorithm(graph_access& G, const MISConfig& config, bool called_from_fold = false,
+                                size_t init_length_non_impr_seq = 0);
+
+    void set_lower_weight(NodeWeight init_weight);
 
     void reduce_graph();
     bool run_branch_reduce();
+
+    // some metrics only for analysis
+    NodeWeight impr_ils = 0;
+    NodeWeight impr_branching = 0;
+    bool is_init_best() const { return is_init_best_solution; }
 
     static size_t run_ils(const MISConfig& config, graph_access& G, sized_vector<NodeID>& tmp_buffer, size_t max_swaps);
     static void greedy_initial_is(graph_access& G, sized_vector<NodeID>& tmp_buffer);

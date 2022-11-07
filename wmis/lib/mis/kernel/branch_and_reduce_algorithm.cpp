@@ -18,8 +18,9 @@ std::stringstream cout_handler::buffered_output;
 int cout_handler::disable_count = 0;
 
 branch_and_reduce_algorithm::branch_and_reduce_algorithm(graph_access &G, const MISConfig &config,
-                                                         bool called_from_fold)
+                                                         bool called_from_fold, size_t init_length_non_impr_seq)
     : config(config),
+      length_non_impr_seq(init_length_non_impr_seq),
       global_status(G),
       set_1(global_status.n),
       set_2(global_status.n),
@@ -85,6 +86,8 @@ void branch_and_reduce_algorithm::set(NodeID node, IS_status mis_status, bool pu
     if (mis_status == IS_status::included) {
         status.is_weight += status.weights[node];
 
+        status.decr_lower_weight(status.weights[node]);
+
         for (auto neighbor : status.graph[node]) {
             status.node_status[neighbor] = IS_status::excluded;
             status.remaining_nodes--;
@@ -102,12 +105,18 @@ void branch_and_reduce_algorithm::flip_include_exclude(NodeID node) {
     if (status.node_status[node] == IS_status::included) {
         status.node_status[node] = IS_status::excluded;
         status.is_weight -= status.weights[node];
+        if (status.use_lower_weight) {
+            status.lower_weight += status.weights[node];
+        }
 
         add_next_level_neighborhood(node);
     } else {
         // node was excluded
         status.node_status[node] = IS_status::included;
         status.is_weight += status.weights[node];
+        if (status.use_lower_weight) {
+            status.lower_weight -= status.weights[node];
+        }
 
         for (auto neighbor : status.graph[node]) {
             status.node_status[neighbor] = IS_status::excluded;
@@ -126,6 +135,9 @@ void branch_and_reduce_algorithm::flip_include_exclude(NodeID node) {
 void branch_and_reduce_algorithm::unset(NodeID node, bool restore) {
     if (status.node_status[node] == IS_status::included) {
         status.is_weight -= status.weights[node];
+        if (status.use_lower_weight) {
+            status.lower_weight += status.weights[node];
+        }
     }
 
     status.node_status[node] = IS_status::not_set;
@@ -194,16 +206,28 @@ void branch_and_reduce_algorithm::greedy_initial_is(graph_access &G, sized_vecto
 }
 
 void branch_and_reduce_algorithm::compute_ils_pruning_bound() {
-    is_ils_best_solution = true;
     cout_handler::disable_cout();
 
     auto config_cpy = config;
+    if(config.max_length_non_impr_seq < std::numeric_limits<unsigned>::max()) {
+        // in case of no time limit, we define our own
+        config_cpy.time_limit = 1; // seconds
+    }
     config_cpy.time_limit = config_cpy.time_limit * status.n / total_ils_node_count / 100;
 
-    best_weight = status.reduction_offset + status.is_weight + run_ils(config_cpy, *local_graph, buffers[0], 1000);
+    NodeWeight ils_best_weight = status.reduction_offset + status.is_weight + run_ils(config_cpy, *local_graph, buffers[0], 1000);
+
+    if(ils_best_weight > best_weight) {
+        if(is_init_best_solution) {
+            impr_ils = ils_best_weight-best_weight;
+        }
+        best_weight = ils_best_weight;
+        is_init_best_solution = false;
+        is_ils_best_solution = true;
+    }
 
     cout_handler::enable_cout();
-    std::cout << (get_current_is_weight() + best_weight) << " [" << t.elapsed() << "]" << std::endl;
+    // std::cout << (get_current_is_weight() + best_weight) << " [" << t.elapsed() << "]" << std::endl;
 }
 
 NodeWeight branch_and_reduce_algorithm::compute_cover_pruning_bound() {
@@ -437,8 +461,9 @@ bool branch_and_reduce_algorithm::branch_reduce_recursive() {
         config.time_limit = time_limit - t.elapsed();
 
         cout_handler::disable_cout();
-        branch_and_reduce_algorithm br_alg(G, config, true);
+        branch_and_reduce_algorithm br_alg(G, config, true, length_non_impr_seq);
         timeout = !br_alg.run_branch_reduce();
+        length_non_impr_seq = br_alg.length_non_impr_seq;
         cout_handler::enable_cout();
 
         if (timeout) break;
@@ -468,6 +493,15 @@ bool branch_and_reduce_algorithm::branch_reduce_recursive() {
 void branch_and_reduce_algorithm::branch_reduce_single_component() {
     best_weight = 0;
 
+    if(status.use_lower_weight) {
+        best_weight = status.lower_weight;
+        is_init_best_solution = true;
+        is_ils_best_solution = false;
+        // we don't use lower_weight as lower bound again
+        // because if we branch recursively, status.graph consist of more than one component
+        status.use_lower_weight = false;
+    }
+
     if (status.n == 0) {
         return;
     } else if (status.n == 1) {
@@ -489,7 +523,7 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
         return deg(lhs) > deg(rhs) || (deg(lhs) == deg(rhs) && status.weights[lhs] > status.weights[rhs]);
     });
 
-    if (status.n > ILS_SIZE_LIMIT) compute_ils_pruning_bound();
+    if (status.n > ILS_SIZE_LIMIT) compute_ils_pruning_bound(); // && best_weight == 0
 
     recursive_mapping.resize(status.n, 0);
     recursive_comp_map.resize(status.n, 0);
@@ -501,12 +535,18 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
             break;
         }
 
+        // no branching possible anymore (saw too long no improving solution)
+        if(length_non_impr_seq >= config.max_length_non_impr_seq && best_weight != 0) {
+            timeout = true;
+            break;
+        }
+
         NodeID branch_node = node_order[i];
 
         if (i == status.n - 1) {
             if (status.node_status[branch_node] == IS_status::not_set) set(branch_node, IS_status::included);
 
-            update_best_solution();
+            update_best_solution_at_leaf();
             reverse_branching();
             i = status.branching_queue.back().pos;
             continue;
@@ -541,8 +581,22 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
                 status.branching_queue.pop_back();
                 unset(branch_node);
 
-                if (i == 0) break;
+                //if (i == 0) break;
+            }else {
+                //std::cout << "remaining nodes: " << status.remaining_nodes << std::endl;
+                //if(status.remaining_nodes == 0) {
+                    // reached leaf
+                    ++length_non_impr_seq;
+                //}
             }
+
+            // bug-fix: added case: if improvement not possible in the beginning, do not perform any branching at all
+            // still covering case: first branch is not improving (line 698)
+            if (i == 0) {
+                ASSERT_TRUE(status.branching_queue.empty());
+                break;
+            }
+            ASSERT_TRUE(!status.branching_queue.empty());
 
             reverse_branching();
             i = status.branching_queue.back().pos;
@@ -571,9 +625,9 @@ bool branch_and_reduce_algorithm::run_branch_reduce() {
     t.restart();
     initial_reduce();
 
-    std::cout << "%reduction_nodes " << global_status.remaining_nodes << "\n";
-    std::cout << "%reduction_offset " << global_status.is_weight + global_status.reduction_offset << "\n";
-    std::cout << "reduction_time " << t.elapsed() << "\n";
+    // std::cout << "%reduction_nodes " << global_status.remaining_nodes << "\n";
+    // std::cout << "%reduction_offset " << global_status.is_weight + global_status.reduction_offset << "\n";
+    // std::cout << "reduction_time " << t.elapsed() << "\n";
 
     if (global_status.remaining_nodes == 0) {
         restore_best_global_solution();
@@ -581,10 +635,6 @@ bool branch_and_reduce_algorithm::run_branch_reduce() {
     }
 
     build_global_graph_access();
-
-    // TODO print kernel global_graph
-    graph_io::writeGraphWeighted(global_graph, "kernel.graph");
-    return;
 
     std::vector<int> comp_map(global_status.remaining_nodes, 0);
     size_t comp_count = strongly_connected_components().strong_components(global_graph, comp_map);
@@ -635,16 +685,36 @@ bool branch_and_reduce_algorithm::run_branch_reduce() {
         status = graph_status(*local_graph);
         set_local_reductions();
 
+        if (global_status.use_lower_weight && comp_idx.size() == 1) {
+            status.lower_weight = global_status.lower_weight;
+            status.use_lower_weight = true;
+        }
+
         branch_reduce_single_component();
 
+        if (is_init_best_solution) {
+            // global_status.use_lower_weight && comp_idx.size() == 1 &&
+            // only one component whose was not improved
+            ASSERT_TRUE(status.lower_weight == best_weight);
+            return false;
+        }else{
+            //ASSERT_TRUE(status.is_weight == best_weight);
+            ASSERT_TRUE(best_weight > status.lower_weight || best_weight == 0);
+        }
+
+        //NodeWeight checksum = 0;
         for (size_t node = 0; node < status.n; node++) {
             // if (status.node_status[node] == IS_status::not_set ||
             // status.node_status[node] == IS_status::folded) { 	std::cerr <<
             // "error: node is not_set / folded after restore" << std::endl; 	exit(1);
             // }
-
+            /*if(status.node_status[node] == IS_status::included) {
+                checksum += status.weights[node];
+            }*/
             global_status.node_status[global_mapping[local_mapping[node]]] = status.node_status[node];
         }
+        //ASSERT_TRUE(checksum == best_weight);
+        //ASSERT_TRUE(checksum == status.is_weight + status.reduction_offset);
 
         global_status.is_weight += best_weight;
         global_status.remaining_nodes -= status.n;
@@ -657,6 +727,7 @@ bool branch_and_reduce_algorithm::run_branch_reduce() {
     }
 
     restore_best_global_solution();
+    ASSERT_TRUE(timeout || status.is_weight > status.lower_weight);
     return !timeout;
 }
 
@@ -666,9 +737,31 @@ void branch_and_reduce_algorithm::update_best_solution() {
         best_solution_status = status;
         best_weight = current_weight;
         is_ils_best_solution = false;
+        is_init_best_solution = false;
 
         std::cout << (get_current_is_weight() + current_weight) << " [" << t.elapsed() << "]" << std::endl;
     }
+}
+
+void branch_and_reduce_algorithm::update_best_solution_at_leaf() {
+    NodeWeight current_weight = status.is_weight + status.reduction_offset;
+    if (current_weight > best_weight) {
+        if(status.lower_weight != 0) {
+            // we only cover improvements if this is a single component where an initial solution was provided
+            impr_branching += current_weight-best_weight;
+        }
+        best_solution_status = status;
+        best_weight = current_weight;
+        is_ils_best_solution = false;
+        is_init_best_solution = false;
+        length_non_impr_seq = 0;
+
+
+        std::cout << (get_current_is_weight() + current_weight) << " [" << t.elapsed() << "]" << std::endl;
+    }else {
+        ++length_non_impr_seq;
+    }
+    //std::cout << "length non impr seq" << length_non_impr_seq << std::endl;
 }
 
 void branch_and_reduce_algorithm::reverse_branching() {
@@ -704,29 +797,97 @@ void branch_and_reduce_algorithm::restore_best_local_solution() {
                 status.node_status[node] = IS_status::excluded;
             }
         }
+
+// sanity check
+// check whether lower solution is maximal wis
+#ifndef NDEBUG
+std::cout << "debug" << std::endl;
+for (NodeID node = 0; node < local_graph->number_of_nodes(); ++node) {
+    if (status.node_status[node] == IS_status::excluded) {
+        bool found_sol_neighbor = false;
+        forall_out_edges ((*local_graph), e, node) {
+            auto target = local_graph->getEdgeTarget(e);
+            if (status.node_status[target] == IS_status::included) {
+                found_sol_neighbor = true;
+                break;
+            }
+        }
+        endfor
+        if (!found_sol_neighbor) {
+            throw std::invalid_argument(std::string("not maximal"));
+        }
+    } else {
+        forall_out_edges ((*local_graph), e, node) {
+            auto target = local_graph->getEdgeTarget(e);
+            if (status.node_status[target] == IS_status::included) {
+                throw std::invalid_argument(std::string("not independent"));
+            }
+        }
+        endfor
+    }
+}
+#endif
+
         return;
     }
 
-    status = best_solution_status;
-    status.modified_queue.pop_back();
-
-    while (!status.modified_queue.empty()) {
-        NodeID node = status.modified_queue.back();
+    if (!is_init_best_solution) {
+        ASSERT_TRUE(best_weight != 0)
+        status = best_solution_status;
         status.modified_queue.pop_back();
 
-        if (node == BRANCHING_TOKEN) {
-            status.graph.restore_node(status.branching_queue.back().node);
-            status.branching_queue.pop_back();
-            continue;
+        // test
+        while (!status.modified_queue.empty()) {
+            NodeID node = status.modified_queue.back();
+            status.modified_queue.pop_back();
+
+            if (node == BRANCHING_TOKEN) {
+                status.graph.restore_node(status.branching_queue.back().node);
+                status.branching_queue.pop_back();
+                continue;
+            }
+
+            if (status.node_status[node] == IS_status::folded) {
+                auto type = status.folded_queue.back();
+                status.folded_queue.pop_back();
+                status.reductions[local_reduction_map[type]]->apply(this);
+            } else {
+                status.graph.restore_node(node);
+            }
         }
 
-        if (status.node_status[node] == IS_status::folded) {
-            auto type = status.folded_queue.back();
-            status.folded_queue.pop_back();
-            status.reductions[local_reduction_map[type]]->apply(this);
-        } else {
-            status.graph.restore_node(node);
+        // sanity check
+// check whether lower solution is maximal wis
+#ifndef NDEBUG
+        std::cout << "debug" << std::endl;
+        for (NodeID node = 0; node < local_graph->number_of_nodes(); ++node) {
+            if (status.node_status[node] == IS_status::excluded) {
+                bool found_sol_neighbor = false;
+                forall_out_edges ((*local_graph), e, node) {
+                    auto target = local_graph->getEdgeTarget(e);
+                    if (status.node_status[target] == IS_status::included) {
+                        found_sol_neighbor = true;
+                        break;
+                    }
+                }
+                endfor
+                if (!found_sol_neighbor) {
+                    throw std::invalid_argument(std::string("not maximal"));
+                }
+            } else {
+                forall_out_edges ((*local_graph), e, node) {
+                    auto target = local_graph->getEdgeTarget(e);
+                    if (status.node_status[target] == IS_status::included) {
+                        throw std::invalid_argument(std::string("not independent"));
+                    }
+                }
+                endfor
+            }
         }
+#endif
+
+    } else {
+        ASSERT_TRUE(best_weight <= status.lower_weight)
     }
 }
 
@@ -844,6 +1005,14 @@ void branch_and_reduce_algorithm::build_induced_subgraph(graph_access &G, const 
     }
 
     G.finish_construction();
+}
+
+void branch_and_reduce_algorithm::set_lower_weight(NodeWeight init_weight) {
+    // must be called before run_branch_and_reduce
+    ASSERT_TRUE(global_status.remaining_nodes == global_status.n);
+
+    global_status.lower_weight = init_weight;
+    global_status.use_lower_weight = true;
 }
 
 void branch_and_reduce_algorithm::reverse_reduction(graph_access &G, graph_access &reduced_G,
