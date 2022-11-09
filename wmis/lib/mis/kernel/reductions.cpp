@@ -780,6 +780,7 @@ bool generalized_neighborhood_reduction::reduce(branch_and_reduce_algorithm* br_
             // compute MWIS in N(v)
             config.time_limit = status.graph[v].size() / 10.0;
             config.max_length_non_impr_seq = std::numeric_limits<size_t>::max();
+            config.compute_ils_on_lb_available = true;
             br_alg->build_induced_neighborhood_subgraph(neighborhood_graph, v);
             branch_and_reduce_algorithm neighborhood_br_alg(neighborhood_graph, config, true);
 
@@ -844,6 +845,7 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
             // compute MWIS in N(v)
             config.time_limit = status.graph[v].size() / 10.0;
             config.max_length_non_impr_seq = std::numeric_limits<size_t>::max();
+            config.compute_ils_on_lb_available = true;
 
             br_alg->build_induced_subgraph(neighborhood_graph, neighbors, neighbors_set, reverse_mapping);
             branch_and_reduce_algorithm neighborhood_br_alg(neighborhood_graph, config, true);
@@ -942,6 +944,7 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 
                     config.time_limit = neighbors.size() / 10.0;
                     config.max_length_non_impr_seq = std::numeric_limits<size_t>::max();
+                    config.compute_ils_on_lb_available = true;
                     branch_and_reduce_algorithm neighborhood_br_alg(neighborhood_graph, config, true);
 
                     if (!neighborhood_br_alg.run_branch_reduce()) {

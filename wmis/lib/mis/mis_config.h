@@ -54,6 +54,9 @@ struct MISConfig {
     // Maximum number of non-improving solution (leaves) during branching since last improving solution (leaf)
     size_t max_length_non_impr_seq;
 
+    // Is computing an Lower-Bound using ILS allowed when Lower-Bound is given
+    bool compute_ils_on_lb_available;
+
 
     void setReductionStyle(const std::string & redu_style) {
         if (strCompare(redu_style, "normal") || strCompare(redu_style, "sparse")) {

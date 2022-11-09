@@ -37,11 +37,11 @@ class cout_handler {
     static void disable_cout() {
         disable_count++;
 
-        /*if (disable_count == 1) {
+        if (disable_count == 1) {
             buffered_output.str(std::string());
             buffered_output.clear();
             std::cout.rdbuf(buffered_output.rdbuf());
-        }*/
+        }
     }
 
     static void enable_cout() {
@@ -49,7 +49,7 @@ class cout_handler {
 
         disable_count--;
 
-        //if (disable_count == 0) std::cout.rdbuf(cout_rdbuf_backup);
+        if (disable_count == 0) std::cout.rdbuf(cout_rdbuf_backup);
     }
 };
 

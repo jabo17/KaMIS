@@ -523,7 +523,7 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
         return deg(lhs) > deg(rhs) || (deg(lhs) == deg(rhs) && status.weights[lhs] > status.weights[rhs]);
     });
 
-    if (status.n > ILS_SIZE_LIMIT) compute_ils_pruning_bound(); // && best_weight == 0
+    if (status.n > ILS_SIZE_LIMIT && (!is_init_best_solution || config.compute_ils_on_lb_available)) compute_ils_pruning_bound(); // && best_weight == 0
 
     recursive_mapping.resize(status.n, 0);
     recursive_comp_map.resize(status.n, 0);
