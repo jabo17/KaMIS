@@ -32,7 +32,7 @@ branch_and_reduce_algorithm::branch_and_reduce_algorithm(graph_access &G, const 
     } else if (config.reduction_style == MISConfig::Reduction_Style::DENSE) {
         global_status.reductions =
             make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction,
-                                  twin_reduction, generalized_fold_reduction>(global_status.n);
+                                  twin_reduction>(global_status.n); // generalized_fold_reduction
     } else {
         // MISConfig::Reduction_Style::NORMAL
         global_status.reductions =
@@ -209,7 +209,7 @@ void branch_and_reduce_algorithm::compute_ils_pruning_bound() {
     cout_handler::disable_cout();
 
     auto config_cpy = config;
-    if(config.max_length_non_impr_seq < std::numeric_limits<unsigned>::max()) {
+    if(config.max_length_non_impr_seq < std::numeric_limits<size_t>::max()) {
         // in case of no time limit, we define our own
         config_cpy.time_limit = 1; // seconds
     }
@@ -584,10 +584,10 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
                 //if (i == 0) break;
             }else {
                 //std::cout << "remaining nodes: " << status.remaining_nodes << std::endl;
-                //if(status.remaining_nodes == 0) {
+                if(status.remaining_nodes == 0) {
                     // reached leaf
                     ++length_non_impr_seq;
-                //}
+                }
             }
 
             // bug-fix: added case: if improvement not possible in the beginning, do not perform any branching at all
@@ -625,9 +625,9 @@ bool branch_and_reduce_algorithm::run_branch_reduce() {
     t.restart();
     initial_reduce();
 
-    // std::cout << "%reduction_nodes " << global_status.remaining_nodes << "\n";
-    // std::cout << "%reduction_offset " << global_status.is_weight + global_status.reduction_offset << "\n";
-    // std::cout << "reduction_time " << t.elapsed() << "\n";
+    std::cout << "%reduction_nodes " << global_status.remaining_nodes << "\n";
+    std::cout << "%reduction_offset " << global_status.is_weight + global_status.reduction_offset << "\n";
+    std::cout << "reduction_time " << t.elapsed() << "\n";
 
     if (global_status.remaining_nodes == 0) {
         restore_best_global_solution();
