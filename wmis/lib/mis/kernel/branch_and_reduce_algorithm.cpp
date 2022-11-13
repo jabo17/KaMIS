@@ -32,7 +32,7 @@ branch_and_reduce_algorithm::branch_and_reduce_algorithm(graph_access &G, const 
     } else if (config.reduction_style == MISConfig::Reduction_Style::DENSE) {
         global_status.reductions =
             make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction,
-                                  twin_reduction>(global_status.n); // generalized_fold_reduction
+                                  twin_reduction, generalized_fold_reduction>(global_status.n);
     } else {
         // MISConfig::Reduction_Style::NORMAL
         global_status.reductions =
@@ -584,10 +584,10 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
                 //if (i == 0) break;
             }else {
                 //std::cout << "remaining nodes: " << status.remaining_nodes << std::endl;
-                if(status.remaining_nodes == 0) {
+                //if(status.remaining_nodes == 0) {
                     // reached leaf
                     ++length_non_impr_seq;
-                }
+                //}
             }
 
             // bug-fix: added case: if improvement not possible in the beginning, do not perform any branching at all
