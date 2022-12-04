@@ -625,9 +625,9 @@ bool branch_and_reduce_algorithm::run_branch_reduce() {
     t.restart();
     initial_reduce();
 
-    std::cout << "%reduction_nodes " << global_status.remaining_nodes << "\n";
-    std::cout << "%reduction_offset " << global_status.is_weight + global_status.reduction_offset << "\n";
-    std::cout << "reduction_time " << t.elapsed() << "\n";
+    //std::cout << "%reduction_nodes " << global_status.remaining_nodes << "\n";
+    //std::cout << "%reduction_offset " << global_status.is_weight + global_status.reduction_offset << "\n";
+    //std::cout << "reduction_time " << t.elapsed() << "\n";
 
     if (global_status.remaining_nodes == 0) {
         restore_best_global_solution();

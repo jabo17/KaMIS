@@ -38,6 +38,14 @@ public:
 	bool get(int i) const {
 		return (used[i] == uid);
 	}
+
+        void resize(size_t size) {
+            used.resize(size, uid - 1);
+        }
+
+        size_t size() {
+            return used.size();
+        }
 };
 
 #endif // FAST_SET_H
