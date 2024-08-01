@@ -90,20 +90,29 @@ private:
 		dynamic_graph graph;
 		std::vector<NodeWeight> weights;
 		std::vector<IS_status> node_status;
+                std::vector<IS_status> lb_node_status;
+                NodeWeight lb_is_weight = 0;
 		std::vector<reduction_ptr> reductions;
 		sized_vector<reduction_type> folded_queue;
 		sized_vector<node_pos> branching_queue;
 		sized_vector<NodeID> modified_queue;
+                sized_vector<NodeID> modified_lb_queue;
 
 		graph_status() = default;
 
 		graph_status(graph_access& G) :
-			n(G.number_of_nodes()), remaining_nodes(n), graph(G), weights(n, 0), node_status(n, IS_status::not_set),
-			folded_queue(n), branching_queue(n), modified_queue(n + 1) {
+			n(G.number_of_nodes()), remaining_nodes(n), graph(G), weights(n, 0), node_status(n, IS_status::not_set), lb_node_status(n, IS_status::excluded),
+			folded_queue(n), branching_queue(n), modified_queue(n + 1), modified_lb_queue(n + 1) {
 
 			forall_nodes(G, node) {
 				weights[node] = G.getNodeWeight(node);
 			} endfor
+                        forall_nodes(G, node) {
+                                if(G.getPartitionIndex(node) == 1) {
+                                  lb_node_status[node] = IS_status::included;
+                                  lb_is_weight += G.getNodeWeight(node);
+                                }
+                        } endfor
 		}
 	};
 

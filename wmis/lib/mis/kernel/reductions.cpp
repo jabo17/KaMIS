@@ -396,6 +396,11 @@ void fold2_reduction::restore(branch_and_reduce_algorithm* br_alg) {
 }
 
 void fold2_reduction::apply(branch_and_reduce_algorithm* br_alg) {
+#ifndef NDEBUG
+    NodeWeight previous_is_weight = br_alg->status.is_weight + br_alg->status.reduction_offset;
+#endif
+    std::cerr << "applying fold2" << std::endl;
+
 	auto& status = br_alg->status;
 	auto nodes = restore_vec.back().nodes;
 	auto main_status = status.node_status[nodes.main];
@@ -406,7 +411,11 @@ void fold2_reduction::apply(branch_and_reduce_algorithm* br_alg) {
 		status.node_status[nodes.rest[0]] = IS_status::included;
 		status.node_status[nodes.rest[1]] = IS_status::included;
 
-		status.is_weight += status.weights[nodes.rest[0]] + status.weights[nodes.rest[1]];
+		// weight of folded vertex: status.is_weight += status.weights[nodes.rest[0]] + status.weights[nodes.rest[1]];
+        // status.weights[nodes.rest[0]] + status.weights[nodes.rest[1]] - status.weights[nodes.main]
+        //   was already added to is_weight when including nodes.main as folded vertex
+        // only add status.weights[nodes.main] to is_weight
+        status.is_weight += status.weights[nodes.main]; //
 	} else {
 		status.node_status[nodes.main] = IS_status::included;
 		status.node_status[nodes.rest[0]] = IS_status::excluded;
@@ -414,6 +423,9 @@ void fold2_reduction::apply(branch_and_reduce_algorithm* br_alg) {
 
 		status.is_weight += status.weights[nodes.main];
 	}
+#ifndef NDEBUG
+    ASSERT_TRUE(br_alg->status.is_weight + br_alg->status.reduction_offset == previous_is_weight);
+#endif
 }
 
 bool clique_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
@@ -1071,7 +1083,7 @@ void generalized_fold_reduction::apply(branch_and_reduce_algorithm* br_alg) {
 			status.node_status[node] = IS_status::included;
 		}
 
-		status.is_weight += MWIS_weight;
+		status.is_weight += status.weights[nodes.main]; //MWIS_weight;
 	} else {
 		status.node_status[nodes.main] = IS_status::included;
 
