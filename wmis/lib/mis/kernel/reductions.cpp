@@ -16,6 +16,7 @@ typedef branch_and_reduce_algorithm::IS_status IS_status;
 bool neighborhood_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 	auto& status = br_alg->status;
 	size_t oldn = status.remaining_nodes;
+  NodeWeight oldo = status.reduction_offset + status.is_weight;
 
 	for (size_t v_idx = 0; v_idx < marker.current_size(); v_idx++) {
 		NodeID v = marker.current_vertex(v_idx);
@@ -33,7 +34,7 @@ bool neighborhood_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 		}
 	}
 
-	//std::cout << "neighbor redu -> " << (oldn - status.remaining_nodes) << std::endl;
+	std::cout << "redu-stat,neighbor," << (oldn - status.remaining_nodes) << "," << (status.reduction_offset + status.is_weight - oldo) << std::endl;
 
 	return oldn != status.remaining_nodes;
 }
@@ -43,6 +44,7 @@ bool clique_neighborhood_reduction_fast::reduce(branch_and_reduce_algorithm* br_
 	auto& neighbors = br_alg->buffers[0];
 	auto& neighborhood = br_alg->set_1;
 	size_t oldn = status.remaining_nodes;
+  NodeWeight oldo = status.reduction_offset + status.is_weight;
 
 	NodeWeight neighbor_weights;
 
@@ -98,6 +100,7 @@ bool clique_neighborhood_reduction_fast::reduce(branch_and_reduce_algorithm* br_
 	}
 
 	//std::cout << "clique neighbor fast redu -> " << (oldn - status.remaining_nodes) << std::endl;
+	std::cout << "redu-start,clique neighbor fast," << (oldn - status.remaining_nodes) << "," << (status.reduction_offset + status.is_weight - oldo) << std::endl;
 
 	return oldn != status.remaining_nodes;
 }
@@ -106,6 +109,7 @@ bool clique_neighborhood_reduction::reduce(branch_and_reduce_algorithm* br_alg) 
 	this->br_alg = br_alg;
 	auto& status = br_alg->status;
 	size_t oldn = status.remaining_nodes;
+  NodeWeight oldo = status.reduction_offset + status.is_weight;
 
 	for (size_t v_idx = 0; v_idx < marker.current_size(); v_idx++) {
 		NodeID v = marker.current_vertex(v_idx);
@@ -116,6 +120,7 @@ bool clique_neighborhood_reduction::reduce(branch_and_reduce_algorithm* br_alg) 
 	}
 
 	//std::cout << "clique neighbor redu -> " << (oldn - status.remaining_nodes) << std::endl;
+	std::cout << "redu-stat,clique neighbor," << (oldn - status.remaining_nodes) << "," << (status.reduction_offset + status.is_weight - oldo) << std::endl;
 
 	return oldn != status.remaining_nodes;
 }
@@ -221,6 +226,7 @@ bool critical_set_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 	auto& status = br_alg->status;
 	size_t n = br_alg->status.n;
 	size_t oldn = status.remaining_nodes;
+  NodeWeight oldo = status.reduction_offset + status.is_weight;
 
 	// build bipartite flow graph
 	// node '+ n' shows that we refer to the node in the rest[1] partition
@@ -284,6 +290,7 @@ bool critical_set_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 		}
 
 	//std::cout << "cs redu -> " << (oldn - status.remaining_nodes) << std::endl;
+	std::cout << "redu-stat,cs," << (oldn - status.remaining_nodes) << "," << (status.reduction_offset + status.is_weight - oldo) << std::endl;
 
 	return oldn != status.remaining_nodes;
 }
@@ -291,6 +298,7 @@ bool critical_set_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 bool fold2_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 	auto& status = br_alg->status;
 	size_t oldn = status.remaining_nodes;
+  NodeWeight oldo = status.reduction_offset + status.is_weight;
 
 	std::array<NodeID, 2> neighbors;
 	size_t neighbor_count;
@@ -336,6 +344,7 @@ bool fold2_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 	}
 
 	//std::cout << "fold2 redu -> " << (oldn - status.remaining_nodes) << std::endl;
+	std::cout << "redu-stat,fold2," << (oldn - status.remaining_nodes) << "," << (status.reduction_offset + status.is_weight - oldo) << std::endl;
 
 	return oldn != status.remaining_nodes;
 }
@@ -436,6 +445,7 @@ bool clique_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 	std::vector<NodeID> non_isolated;
 
 	size_t oldn = status.remaining_nodes;
+  NodeWeight oldo = status.reduction_offset + status.is_weight;
 
 	for (size_t node_idx = 0; node_idx < marker.current_size(); node_idx++) {
 		NodeID node = marker.current_vertex(node_idx);
@@ -522,6 +532,7 @@ bool clique_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 	}
 
 	//std::cout << "clique redu -> " << (oldn - status.remaining_nodes) << std::endl;
+	std::cout << "redu-stat,clique," << (oldn - status.remaining_nodes) << "," << (status.reduction_offset + status.is_weight - oldo) << std::endl;
 
 	return oldn != status.remaining_nodes;
 }
@@ -588,6 +599,7 @@ bool twin_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 	auto& twin_candidates_set = br_alg->set_1;
 	auto& tmp_set = br_alg->set_2;
 	size_t oldn = status.remaining_nodes;
+  NodeWeight oldo = status.reduction_offset + status.is_weight;
 
 	NodeID twin;
 	NodeWeight neighbors_weight;
@@ -649,6 +661,7 @@ bool twin_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 	}
 
 	//std::cout << "twin redu -> " << (oldn - status.remaining_nodes) << std::endl;
+	std::cout << "redu-stat,twin," << (oldn - status.remaining_nodes) << "," << (status.reduction_offset + status.is_weight - oldo) << std::endl;
 
 	return oldn != status.remaining_nodes;
 }
@@ -695,6 +708,7 @@ bool domination_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 	auto& status = br_alg->status;
 	auto& neighbors = br_alg->set_1;
 	size_t oldn = status.remaining_nodes;
+  NodeWeight oldo = status.reduction_offset + status.is_weight;
 
 	for (size_t v_idx = 0; v_idx < marker.current_size(); v_idx++) {
 		NodeID v = marker.current_vertex(v_idx);
@@ -740,6 +754,7 @@ bool domination_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 	}
 
 	//std::cout << "domination redu -> " << (oldn - status.remaining_nodes) << std::endl;
+	std::cout << "redu-stat,domination," << (oldn - status.remaining_nodes) << "," << (status.reduction_offset + status.is_weight - oldo) << std::endl;
 
 	return oldn != status.remaining_nodes;
 }
@@ -747,6 +762,7 @@ bool domination_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 bool generalized_neighborhood_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 	auto& status = br_alg->status;
 	size_t oldn = status.remaining_nodes;
+  NodeWeight oldo = status.reduction_offset + status.is_weight;
 
 	graph_access neighborhood_graph;
 	auto config = br_alg->config;
@@ -800,6 +816,7 @@ bool generalized_neighborhood_reduction::reduce(branch_and_reduce_algorithm* br_
 	cout_handler::enable_cout();
 
 	//std::cout << "generalized_neighborhood_reduction -> " << (oldn - status.remaining_nodes) << std::endl;
+	std::cout << "redu-stat,generalized neighborhood," << (oldn - status.remaining_nodes) << "," << (status.reduction_offset + status.is_weight - oldo) << std::endl;
 
 	return oldn != status.remaining_nodes;
 }
@@ -811,6 +828,7 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 	auto& MWIS_set = br_alg->set_2;
 	auto& reverse_mapping = br_alg->buffers[1];
 	size_t oldn = status.remaining_nodes;
+  NodeWeight oldo = status.reduction_offset + status.is_weight;
 
 	graph_access neighborhood_graph;
 	auto config = br_alg->config;
@@ -982,6 +1000,7 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 		//std::cout << "%generalized_fold_reduction improvement: " << (oldn - status.remaining_nodes) << std::endl;
 
 	//std::cout << "generalized_fold_reduction -> " << (oldn - status.remaining_nodes) << std::endl;
+	std::cout << "redu-stat,generalized fold," << (oldn - status.remaining_nodes) << "," << (status.reduction_offset + status.is_weight - oldo) << std::endl;
 
 	return oldn != status.remaining_nodes;
 }
