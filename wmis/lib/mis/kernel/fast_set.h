@@ -14,7 +14,7 @@ class fast_set {
 	int uid;
 
 public:
-	fast_set(int const n) : used(n, 0), uid(1)
+	explicit fast_set(int const n) : used(n, 0), uid(1)
     { }
 
 	void clear() {

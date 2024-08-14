@@ -6,9 +6,15 @@ if (NOT CMAKE_BUILD_TYPE)
 endif (NOT CMAKE_BUILD_TYPE)
 
 #probably set by Release, but doing anyway.
-if(CMAKE_BUILD_TYPE EQUAL "Release")
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
     add_definitions(-DNDEBUG)
     add_compile_options(-O3)
+elseif (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_compile_options(-O1)
+    #add_compile_options(-fsanitize=address)
+    #add_compile_options(-static-libasan)
+    add_compile_options(-g)
+    add_compile_options(-Wall)
 endif()
 
 set(CMAKE_CXX_STANDARD 14)

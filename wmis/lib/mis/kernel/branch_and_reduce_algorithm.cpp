@@ -21,12 +21,15 @@ branch_and_reduce_algorithm::branch_and_reduce_algorithm(graph_access& G, const 
 	: config(config), global_status(G), set_1(global_status.n), set_2(global_status.n), double_set(global_status.n * 2), buffers(2, sized_vector<NodeID>(global_status.n)) {
 
 	if (called_from_fold) {
+        //global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction>(global_status.n);
 		global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction>(global_status.n);
 	} else if (config.reduction_style == MISConfig::Reduction_Style::DENSE) {
+        //global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction,  domination_reduction, generalized_fold_reduction>(global_status.n);
 		global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, generalized_fold_reduction>(global_status.n);
 	} else {
 		// MISConfig::Reduction_Style::NORMAL
-		global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction, generalized_fold_reduction>(global_status.n);
+		//global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, clique_neighborhood_reduction, critical_set_reduction, generalized_fold_reduction>(global_status.n);
+        global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction, generalized_fold_reduction>(global_status.n);
 	}
 
 	global_reduction_map.resize(REDUCTION_NUM);
@@ -40,9 +43,11 @@ branch_and_reduce_algorithm::branch_and_reduce_algorithm(graph_access& G, const 
 		} else {
 			// MISConfig::Reduction_Style::NORMAL
 			if (called_from_fold) {
-				status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction>(status.n);
+                status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, domination_reduction, clique_neighborhood_reduction, critical_set_reduction>(status.n);
+				//status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction>(status.n);
 			} else {
-				status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction, generalized_fold_reduction>(status.n);
+                status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, domination_reduction, clique_neighborhood_reduction, critical_set_reduction, generalized_fold_reduction>(status.n);
+				//status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction, generalized_fold_reduction>(status.n);
 			}
 		}
 
@@ -59,7 +64,8 @@ size_t branch_and_reduce_algorithm::deg(NodeID node) const {
 }
 
 void branch_and_reduce_algorithm::set(NodeID node, IS_status mis_status, bool push_modified) {
-	status.node_status[node] = mis_status;
+    ASSERT_TRUE(status.lb_is_weight >= (status.is_weight + status.reduction_offset));
+    status.node_status[node] = mis_status;
 	status.remaining_nodes--;
 	status.graph.hide_node(node);
 
@@ -70,11 +76,18 @@ void branch_and_reduce_algorithm::set(NodeID node, IS_status mis_status, bool pu
 		status.is_weight += status.weights[node];
 
         status.modified_lb_queue.push_back(BRANCHING_TOKEN);
+        if(status.lb_node_status[node] == IS_status::excluded) {
+            status.lb_node_status[node] = IS_status::included;
+            status.modified_lb_queue.push_back(node);
+            status.lb_is_weight += status.weights[node];
+        }
+
 		for (auto neighbor : status.graph[node]) {
 			status.node_status[neighbor] = IS_status::excluded;
 			status.remaining_nodes--;
 			status.graph.hide_node(neighbor);
 
+            status.modified_lb_queue.push_back(BRANCHING_TOKEN);
             if(status.lb_node_status[neighbor] == IS_status::included) {
                 status.lb_node_status[neighbor] = IS_status::excluded;
                 status.modified_lb_queue.push_back(neighbor);
@@ -84,11 +97,6 @@ void branch_and_reduce_algorithm::set(NodeID node, IS_status mis_status, bool pu
 			status.modified_queue.push_back(neighbor);
 			add_next_level_neighborhood(neighbor);
 		}
-        if(status.lb_node_status[node] == IS_status::excluded) {
-                status.lb_node_status[node] = IS_status::included;
-                status.modified_lb_queue.push_back(node);
-                status.lb_is_weight += status.weights[node];
-        }
 
 	}
 	else {
@@ -101,31 +109,54 @@ void branch_and_reduce_algorithm::set(NodeID node, IS_status mis_status, bool pu
             status.lb_is_weight -= status.weights[node];
         }
 	}
+
+    //std::cout << "set back: " << status.modified_lb_queue.back() << " node " << node << std::endl ;
+
+    ASSERT_TRUE(status.lb_is_weight >= (status.is_weight + status.reduction_offset));
 }
 
 void branch_and_reduce_algorithm::flip_include_exclude(NodeID node) {
+    //std::cout << "restore back: " << status.modified_lb_queue.back() << " node " << node << std::endl ;
+    ASSERT_TRUE(status.maintain_lb);
 
-	if (status.node_status[node] == IS_status::included) {
+#ifndef NDEBUG
+    NodeWeight lb_visible = 0;
+    for(NodeID node = 0; node < status.n; ++node) {
+        if (status.node_status[node] == IS_status::not_set) {
+            if(status.lb_node_status[node] == IS_status::included) {
+                lb_visible += status.weights[node];
+            }
+        }
+    }
+    ASSERT_TRUE(status.lb_is_weight >= lb_visible);
+    std::cout << status.lb_is_weight << " " << lb_visible << " " << status.is_weight + status.reduction_offset << std::endl;
+    ASSERT_TRUE(status.lb_is_weight - lb_visible == status.is_weight + status.reduction_offset);
+#endif
+
+    if (status.node_status[node] == IS_status::included) {
 		status.node_status[node] = IS_status::excluded;
 		status.is_weight -= status.weights[node];
 
-                if(status.modified_lb_queue.back() == node) {
-                        // node was included
-                        if(is_ils_best_solution) {
-                                status.lb_node_status[node] = IS_status::excluded;
-                        }
-                        status.modified_lb_queue.pop_back();
-                }
-                while(status.modified_lb_queue.back() != BRANCHING_TOKEN) {
-                        if(is_ils_best_solution) {
-                                status.node_status[status.modified_lb_queue.back()] = IS_status::included;
-                        }
-                        status.modified_lb_queue.pop_back();
-                }
-                if(status.lb_node_status[node] == IS_status::included) {
-                        status.lb_node_status[node] = IS_status::excluded;
-                        status.modified_lb_queue.push_back(node);
-                }
+        ASSERT_TRUE(!status.modified_lb_queue.empty());
+        if(best_weight > status.is_weight + status.reduction_offset) {
+            if(status.modified_lb_queue.back() == node) {
+                // node was forced into lb solution, restore it
+                status.lb_node_status[node] = IS_status::excluded;
+                status.lb_is_weight -= status.weights[node];
+                status.modified_lb_queue.pop_back();
+            }
+        }else{
+            if(status.modified_lb_queue.back() == node) {
+                // node was forced into lb solution, keep it this way
+                status.modified_lb_queue.pop_back();
+            }
+        }
+
+        if(status.lb_node_status[node] == IS_status::included) {
+                status.lb_node_status[node] = IS_status::excluded;
+                status.lb_is_weight -= status.weights[node];
+                status.modified_lb_queue.push_back(node);
+        }
 
 		add_next_level_neighborhood(node);
 	}
@@ -134,13 +165,25 @@ void branch_and_reduce_algorithm::flip_include_exclude(NodeID node) {
 		status.node_status[node] = IS_status::included;
 		status.is_weight += status.weights[node];
 
-                if(status.modified_lb_queue.back() == node) {
-                        // node was excluded
-                        if(is_ils_best_solution) {
-                                status.lb_node_status[node] = IS_status::excluded;
-                        }
-                        status.modified_lb_queue.pop_back();
-                }
+        if(best_weight > status.is_weight + status.reduction_offset) {
+            if(status.modified_lb_queue.back() == node) {
+                // node was forced out of lb solution, restore decision
+                status.lb_node_status[node] = IS_status::included;
+                status.lb_is_weight += status.weights[node];
+                status.modified_lb_queue.pop_back();
+            }
+        }else{
+            if(status.modified_lb_queue.back() == node) {
+                // node was forced out of lb solution, keep this decision
+                status.modified_lb_queue.pop_back();
+            }
+        }
+
+        if(status.lb_node_status[node] == IS_status::excluded) {
+            status.lb_node_status[node] = IS_status::included;
+            status.lb_is_weight += status.weights[node];
+            status.modified_lb_queue.push_back(node);
+        }
 
 		for (auto neighbor : status.graph[node]) {
 			status.node_status[neighbor] = IS_status::excluded;
@@ -148,65 +191,93 @@ void branch_and_reduce_algorithm::flip_include_exclude(NodeID node) {
 			status.graph.hide_node(neighbor);
 
 			status.modified_queue.push_back(neighbor);
-                        if(status.lb_node_status[node] == IS_status::included
-                            && status.lb_node_status[neighbor] == IS_status::included) {
-                          status.lb_node_status[neighbor] = IS_status::excluded;
-                          status.modified_lb_queue.push_back(neighbor);
-                        }
+
+            status.modified_lb_queue.push_back(BRANCHING_TOKEN);
+            if(status.lb_node_status[neighbor] == IS_status::included) {
+                status.lb_node_status[neighbor] = IS_status::excluded;
+                status.lb_is_weight -= status.weights[neighbor];
+                status.modified_lb_queue.push_back(neighbor);
+            }
 
 			// TODO: try calling "add_next_level_neighborhood" in second loop after this one
 			add_next_level_neighborhood(neighbor);
 		}
-        if(status.lb_node_status[node] == IS_status::excluded) {
-          status.lb_node_status[node] = IS_status::included;
-          status.modified_lb_queue.push_back(node);
-        }
+
 	}
+
+#ifndef NDEBUG
+    lb_visible = 0;
+    for(NodeID node = 0; node < status.n; ++node) {
+        if (status.node_status[node] == IS_status::not_set) {
+            if(status.lb_node_status[node] == IS_status::included) {
+                lb_visible += status.weights[node];
+            }
+        }
+    }
+    ASSERT_TRUE(status.lb_is_weight >= lb_visible);
+    std::cout << status.lb_is_weight << " " << lb_visible << " " << status.is_weight + status.reduction_offset << std::endl;
+    ASSERT_TRUE(status.lb_is_weight - lb_visible == status.is_weight + status.reduction_offset);
+#endif
+
+    //std::cout << "set back: " << status.modified_lb_queue.back() << " node " << node << std::endl ;
 
 }
 
 void branch_and_reduce_algorithm::unset(NodeID node, bool restore) {
+    ASSERT_TRUE(!status.modified_lb_queue.empty());
+    //std::cout << "restore back: " << status.modified_lb_queue.back() << " node " << node << std::endl ;
 	if (status.node_status[node] == IS_status::included) {
 		status.is_weight -= status.weights[node];
 
-        if(is_ils_best_solution) {
-            // restore lower bound solution
-            if (status.modified_lb_queue.back() == node) {
-                // node was excluded in lower bound solution
-                status.lb_node_status[node] = IS_status::excluded;
-                status.modified_lb_queue.pop_back();
-                status.lb_is_weight -= status.weights[node];
-            }
-            while (status.modified_lb_queue.back() != BRANCHING_TOKEN) {
-                status.node_status[status.modified_lb_queue.back()] =
-                    IS_status::included;
-                status.modified_lb_queue.pop_back();
-            }
-            status.modified_lb_queue.pop_back();
-        }else {
-              // restore best solution since best solution ist currently better than lower bound solution
-              while (status.modified_lb_queue.back() != BRANCHING_TOKEN) {
-                  // @todo restore best solution
-                status.modified_lb_queue.pop_back();
-              }
-              status.modified_lb_queue.pop_back();
-        }
-	}else{
 
-            if (status.modified_lb_queue.back() == node) {
-                if(is_ils_best_solution) {
-                    // restore lower bound solution
-                    // node was included in lower bound solution
-                    status.lb_node_status[node] = IS_status::included;
-                    status.lb_is_weight += status.weights[node];
-                }else{
-                    // @todo restore best solution
+        if(status.maintain_lb) {
+            if(best_weight > status.is_weight + status.reduction_offset) {
+                if(status.modified_lb_queue.back() == node) {
+                    // node was forced into lb solution, restore it
+                    status.lb_node_status[node] = IS_status::excluded;
+                    status.lb_is_weight -= status.weights[node];
+                    status.modified_lb_queue.pop_back();
                 }
+                while(status.modified_lb_queue.back() != BRANCHING_TOKEN) {
+                    auto &u = status.modified_lb_queue.back();
+                    status.lb_node_status[u] = IS_status::included;
+                    status.lb_is_weight += status.weights[u];
+                    status.modified_lb_queue.pop_back();
+                }
+                ASSERT_TRUE(status.modified_lb_queue.back() == BRANCHING_TOKEN);
+                status.modified_lb_queue.pop_back();
+            }else{
+                if(status.modified_lb_queue.back() == node) {
+                    // node was forced into lb solution, keep it this way
+                    status.modified_lb_queue.pop_back();
+                }
+                while(status.modified_lb_queue.back() != BRANCHING_TOKEN) {
+                    status.modified_lb_queue.pop_back();
+                }
+                ASSERT_TRUE(status.modified_lb_queue.back() == BRANCHING_TOKEN);
                 status.modified_lb_queue.pop_back();
             }
-            status.modified_lb_queue.pop_back();
-
         }
+	}else if(status.maintain_lb){
+        if(best_weight > status.is_weight + status.reduction_offset) {
+            if(status.modified_lb_queue.back() == node) {
+                // node was forced into lb solution, restore it
+                status.lb_node_status[node] = IS_status::included;
+                status.lb_is_weight += status.weights[node];
+                status.modified_lb_queue.pop_back();
+            }
+            ASSERT_TRUE(status.modified_lb_queue.back() == BRANCHING_TOKEN);
+            status.modified_lb_queue.pop_back();
+        }else{
+            if(status.modified_lb_queue.back() == node) {
+                // node was forced into lb solution, keep it this way
+                status.modified_lb_queue.pop_back();
+            }
+            ASSERT_TRUE(status.modified_lb_queue.back() == BRANCHING_TOKEN);
+            status.modified_lb_queue.pop_back();
+        }
+
+    }
 
 	status.node_status[node] = IS_status::not_set;
 	status.remaining_nodes++;
@@ -250,32 +321,60 @@ void branch_and_reduce_algorithm::fill_global_greedy() {
 	}
 }
 
-void branch_and_reduce_algorithm::greedy_initial_is(graph_access& G, sized_vector<NodeID>& tmp_buffer) {
+bool branch_and_reduce_algorithm::greedy_initial_is(graph_access& G, sized_vector<NodeID>& tmp_buffer) {
 	auto nodes = tmp_buffer;
 	nodes.set_size(G.number_of_nodes());
+
+    bool added = false;
 
 	for (size_t i = 0; i < nodes.size(); i++) {
 		nodes[i] = i;
 	}
+
+#ifndef NDEBUG
+    for (NodeID node : nodes) {
+        if(G.getPartitionIndex(node) == 1) {
+            bool independent = true;
+
+            forall_out_edges(G, edge, node) {
+                        NodeID neighbor = G.getEdgeTarget(edge);
+                        if (G.getPartitionIndex(neighbor) == 1) {
+                            independent = false;
+                            break;
+                        }
+                    } endfor
+
+            ASSERT_TRUE(independent);
+        }
+    }
+#endif
 
 	// sort in descending order by node weights
 	std::sort(nodes.begin(), nodes.end(), [&](NodeID lhs, NodeID rhs) {
 		return G.getNodeWeight(lhs) > G.getNodeWeight(rhs);
 	});
 
-        for (NodeID node : nodes) {
-          bool free_node = true;
+    for (NodeID node : nodes) {
+      if(G.getPartitionIndex(node) == 1) {
+          continue;
+      }
+      bool free_node = true;
 
-          forall_out_edges(G, edge, node) {
-            NodeID neighbor = G.getEdgeTarget(edge);
-            if (G.getPartitionIndex(neighbor) == 1) {
-              free_node = false;
-              break;
-            }
-          } endfor
-
-              if (free_node) G.setPartitionIndex(node, 1);
+      forall_out_edges(G, edge, node) {
+        NodeID neighbor = G.getEdgeTarget(edge);
+        if (G.getPartitionIndex(neighbor) == 1) {
+          free_node = false;
+          break;
         }
+      } endfor
+
+      if (free_node) {
+          G.setPartitionIndex(node, 1);
+          added = true;
+      }
+    }
+
+    return added;
 }
 
 void branch_and_reduce_algorithm::compute_ils_pruning_bound() {
@@ -285,19 +384,40 @@ void branch_and_reduce_algorithm::compute_ils_pruning_bound() {
 	auto config_cpy = config;
 	config_cpy.time_limit = config_cpy.time_limit * status.n / total_ils_node_count / 100;
 
-	best_weight = status.reduction_offset + status.is_weight + run_ils(config_cpy, *local_graph, buffers[0], 1000);
+    ASSERT_TRUE(status.reduction_offset + status.is_weight == 0);
+	best_weight = status.reduction_offset + status.is_weight + run_ils(config_cpy, *local_graph, buffers[0], 1000, use_ILS_at_this_top_level);
 
-        // update lower bound solution
-        forall_nodes((*local_graph), node) {
-            if (local_graph->getPartitionIndex(node) == 1) {
-              status.lb_node_status[node] = IS_status::included;
-            }else{
-              status.lb_node_status[node] = IS_status::excluded;
-            }
-        } endfor
+    // update lower bound solution
+    status.lb_is_weight = 0;
+    forall_nodes((*local_graph), node) {
+        if (local_graph->getPartitionIndex(node) == 1) {
+          status.lb_node_status[node] = IS_status::included;
+          status.lb_is_weight += status.weights[node];
+        }else{
+          status.lb_node_status[node] = IS_status::excluded;
+        }
+    } endfor
+
+#ifndef NDEBUG
+    forall_nodes((*local_graph), node) {
+        if(local_graph->getPartitionIndex(node) == 1) {
+            bool independent = true;
+
+            forall_out_edges((*local_graph), edge, node) {
+                        NodeID neighbor = local_graph->getEdgeTarget(edge);
+                        if (local_graph->getPartitionIndex(neighbor) == 1) {
+                            independent = false;
+                            break;
+                        }
+                    } endfor
+
+            ASSERT_TRUE(independent);
+        }
+    } endfor
+#endif
 
 	cout_handler::enable_cout();
-	std::cout << (get_current_is_weight() + best_weight) << " [" << t.elapsed() << "]" << std::endl;
+	std::cout << "ils: " << (get_current_is_weight() + best_weight) << " [" << t.elapsed() << "]" << std::endl;
 }
 
 NodeWeight branch_and_reduce_algorithm::compute_cover_pruning_bound() {
@@ -400,10 +520,13 @@ NodeWeight branch_and_reduce_algorithm::compute_cover_pruning_bound() {
 	return upper_bound;
 }
 
-size_t branch_and_reduce_algorithm::run_ils(const MISConfig& config, graph_access& G, sized_vector<NodeID>& tmp_buffer, size_t max_swaps) {
-	greedy_initial_is(G, tmp_buffer);
-	ils local_search(config);
-	local_search.perform_ils(G, max_swaps);
+size_t branch_and_reduce_algorithm::run_ils(const MISConfig& config, graph_access& G, sized_vector<NodeID>& tmp_buffer, size_t max_swaps, bool use_ILS) {
+	bool added = greedy_initial_is(G, tmp_buffer);
+
+    if(G.number_of_nodes() > ILS_SIZE_LIMIT && added && use_ILS) {
+        ils local_search(config);
+        local_search.perform_ils(G, 10);
+    }
 
 	size_t solution_weight = 0;
 
@@ -479,6 +602,20 @@ void branch_and_reduce_algorithm::reduce_graph() {
 void branch_and_reduce_algorithm::reduce_graph_internal() {
 	bool progress;
 
+#ifndef NDEBUG
+    NodeWeight lb_visible = 0;
+    for(NodeID node = 0; node < status.n; ++node) {
+        if (status.node_status[node] == IS_status::not_set) {
+            if(status.lb_node_status[node] == IS_status::included) {
+                lb_visible += status.weights[node];
+            }
+        }
+    }
+    ASSERT_TRUE(status.lb_is_weight >= lb_visible);
+    std::cout << status.lb_is_weight << " " << lb_visible << " " << status.is_weight + status.reduction_offset << std::endl;
+    ASSERT_TRUE(status.lb_is_weight - lb_visible == status.is_weight + status.reduction_offset);
+#endif
+
 	do {
 		//std::cout << "\ncurrent weight: " << status.is_weight << "  weight offset: " << status.reduction_offset << "  remaining nodes: " << status.remaining_nodes << std::endl;
 		progress = false;
@@ -488,6 +625,20 @@ void branch_and_reduce_algorithm::reduce_graph_internal() {
 
 			init_reduction_step();
 			progress = reduction->reduce(this);
+
+#ifndef NDEBUG
+            NodeWeight lb_visible = 0;
+            for(NodeID node = 0; node < status.n; ++node) {
+                if (status.node_status[node] == IS_status::not_set) {
+                    if(status.lb_node_status[node] == IS_status::included) {
+                        lb_visible += status.weights[node];
+                    }
+                }
+            }
+            ASSERT_TRUE(status.lb_is_weight >= lb_visible);
+            std::cout << status.lb_is_weight << " " << lb_visible << " " << status.is_weight + status.reduction_offset << std::endl;
+            ASSERT_TRUE(status.lb_is_weight - lb_visible == status.is_weight + status.reduction_offset);
+#endif
 
 			if (progress) break;
 
@@ -526,11 +677,14 @@ bool branch_and_reduce_algorithm::branch_reduce_recursive() {
 		graph_access G;
 		extractor.extract_block(recursive_graph, G, i + 2, recursive_local_mapping);
 
-                forall_nodes(G, local_node) {
-                        if(status.lb_node_status[recursive_local_mapping[local_node]] == IS_status::included) {
-                                G.setPartitionIndex(local_node, 1);
-                        }
-                } endfor
+        // set lower bound solution
+        forall_nodes(G, local_node) {
+                if(status.lb_node_status[recursive_mapping[recursive_local_mapping[local_node]]] == IS_status::included) {
+                        G.setPartitionIndex(local_node, 1);
+                }else{
+                        G.setPartitionIndex(local_node, 0);
+                }
+        } endfor
 
 		config.time_limit = time_limit - t.elapsed();
 
@@ -587,8 +741,9 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
 		return deg(lhs) > deg(rhs) || (deg(lhs) == deg(rhs) && status.weights[lhs] > status.weights[rhs]);
 	});
 
-	if (status.n > ILS_SIZE_LIMIT)
-		compute_ils_pruning_bound();
+	if (status.n > LB_SIZE_LIMIT) {
+        compute_ils_pruning_bound();
+    }
 
 	recursive_mapping.resize(status.n, 0);
 	recursive_comp_map.resize(status.n, 0);
@@ -612,7 +767,8 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
 			continue;
 		}
 
-		bool improvement_possible = status.is_weight + status.reduction_offset + compute_cover_pruning_bound() > best_weight;
+		NodeWeight upper_bound =  status.is_weight + status.reduction_offset + compute_cover_pruning_bound();
+        bool improvement_possible = upper_bound > best_weight;
 
 		if (improvement_possible && status.node_status[branch_node] == IS_status::not_set) {
 			// first time reaching this node in this branch
@@ -642,10 +798,10 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
 			if (!status.branching_queue.empty() && status.branching_queue.back().node == branch_node) {
 				status.branching_queue.pop_back();
 				unset(branch_node);
-
-				if (i == 0)
-					break;
 			}
+
+            if (i == 0)
+                break;
 
 			reverse_branching();
 			i = status.branching_queue.back().pos;
@@ -731,19 +887,26 @@ bool branch_and_reduce_algorithm::run_branch_reduce() {
 		extractor.extract_block(global_graph, G, i, local_mapping);
 		local_graph = &G;
 
-                // set lower bound for local graph as partition index
-                // -> it is set for local graph (and used for LB computation)
-                // -> it is set in local status so that we can maintain it
-                forall_nodes((*local_graph), local_node) {
-                        if(global_status.lb_node_status[local_mapping[local_node]] == IS_status::included) {
-                                local_graph->setPartitionIndex(local_node, 1);
-                        }
-                } endfor
+        // set lower bound for local graph as partition index
+        // -> it is set for local graph (and used for LB computation)
+        // -> it is set in local status so that we can maintain it
+        NodeWeight lb = 0;
+        forall_nodes((*local_graph), local_node) {
+                if(global_status.lb_node_status[global_mapping[local_mapping[local_node]]] == IS_status::included) {
+                        local_graph->setPartitionIndex(local_node, 1);
+                        lb += local_graph->getNodeWeight(local_node);
+                }else {
+                    local_graph->setPartitionIndex(local_node, 0);
+                }
+        } endfor
+        //std::cout << "setting lb: " << lb << std::endl;
 
 		status = graph_status(*local_graph);
 		set_local_reductions();
 
 		branch_reduce_single_component();
+
+        //std::cout << "improved: " << (best_weight>lb) << std::endl;
 
 		for (size_t node = 0; node < status.n; node++) {
 			// if (status.node_status[node] == IS_status::not_set || status.node_status[node] == IS_status::folded) {
@@ -753,6 +916,7 @@ bool branch_and_reduce_algorithm::run_branch_reduce() {
 
 			global_status.node_status[global_mapping[local_mapping[node]]] = status.node_status[node];
 		}
+
 
 		global_status.is_weight += best_weight;
 		global_status.remaining_nodes -= status.n;
@@ -772,6 +936,7 @@ void branch_and_reduce_algorithm::update_best_solution() {
 	NodeWeight current_weight = status.is_weight + status.reduction_offset;
 	if (current_weight > best_weight) {
 		best_solution_status = status;
+        best_solution_status.maintain_lb = false;
 		best_weight = current_weight;
 		is_ils_best_solution = false;
 
@@ -788,20 +953,71 @@ void branch_and_reduce_algorithm::reverse_branching() {
 		return;
 	}
 
+    ASSERT_TRUE(status.maintain_lb);
+
+#ifndef NDEBUG
+    NodeWeight lb_visible = 0;
+    for(NodeID node = 0; node < status.n; ++node) {
+        if (status.node_status[node] == IS_status::not_set) {
+            if(status.lb_node_status[node] == IS_status::included) {
+                lb_visible += status.weights[node];
+            }
+        }
+    }
+    ASSERT_TRUE(status.lb_is_weight >= lb_visible);
+    std::cout << status.lb_is_weight << " " << lb_visible << " " << status.is_weight + status.reduction_offset << std::endl;
+    ASSERT_TRUE(status.lb_is_weight - lb_visible == status.is_weight + status.reduction_offset);
+#endif
+
 	while (!status.modified_queue.empty() && !is_token(status.modified_queue.back())) {
 		NodeID node = status.modified_queue.back();
 		status.modified_queue.pop_back();
 
+#ifndef NDEBUG
+        if(best_weight<=status.is_weight + status.reduction_offset) {
+            // we apply node_status
+            ASSERT_TRUE(status.lb_is_weight == status.is_weight + status.reduction_offset);
+        }
+#endif
+
 		if (status.node_status[node] == IS_status::folded) {
-			//std::cout << "reversed fold" << std::endl;
 			auto type = status.folded_queue.back();
 			status.folded_queue.pop_back();
 			status.reductions[local_reduction_map[type]]->restore(this);
+
+#ifndef NDEBUG
+            if(best_weight<=status.is_weight + status.reduction_offset) {
+                // we apply node_status
+                ASSERT_TRUE(status.lb_is_weight == status.is_weight + status.reduction_offset);
+            }
+#endif
+
 			continue;
 		}
 
 		unset(node);
+
+#ifndef NDEBUG
+        if(best_weight<=status.is_weight + status.reduction_offset) {
+            // we apply node_status
+            ASSERT_TRUE(status.lb_is_weight == status.is_weight + status.reduction_offset);
+        }
+#endif
 	}
+
+#ifndef NDEBUG
+    lb_visible = 0;
+    for(NodeID node = 0; node < status.n; ++node) {
+        if (status.node_status[node] == IS_status::not_set) {
+            if(status.lb_node_status[node] == IS_status::included) {
+                lb_visible += status.weights[node];
+            }
+        }
+    }
+    ASSERT_TRUE(status.lb_is_weight >= lb_visible);
+    std::cout << status.lb_is_weight << " " << lb_visible << " " << status.is_weight + status.reduction_offset << std::endl;
+    ASSERT_TRUE(status.lb_is_weight - lb_visible == status.is_weight + status.reduction_offset);
+#endif
 }
 
 void branch_and_reduce_algorithm::restore_best_local_solution() {
@@ -843,6 +1059,7 @@ void branch_and_reduce_algorithm::restore_best_local_solution() {
 
 void branch_and_reduce_algorithm::restore_best_global_solution() {
 	status = std::move(global_status);
+    status.maintain_lb = false;
 	status.modified_queue.pop_back();
 
 	while (!status.modified_queue.empty()) {
@@ -945,6 +1162,11 @@ void branch_and_reduce_algorithm::build_induced_subgraph(graph_access& G, const 
 	for (NodeID node : nodes) {
 		NodeID new_node = G.new_node();
 		G.setNodeWeight(new_node, status.weights[node]);
+        if(status.lb_node_status[node] == IS_status::included) {
+            G.setPartitionIndex(new_node, 1);
+        }else{
+            G.setPartitionIndex(new_node, 0);
+        }
 
 		for (auto neighbor : status.graph[node]) {
 			if (nodes_set.get(neighbor)) {

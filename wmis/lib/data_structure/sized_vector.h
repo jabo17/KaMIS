@@ -19,7 +19,7 @@ public:
 	using iterator = std::vector<NodeID>::iterator;
 	using const_iterator = std::vector<NodeID>::const_iterator;
 
-	sized_vector(size_t min_capacity = 0) : data(min_capacity) { }
+	explicit sized_vector(size_t min_capacity = 0) : data(min_capacity) { }
 	sized_vector(size_t min_capacity, const T& value) : data(min_capacity, value) { }
 
 
@@ -61,9 +61,9 @@ public:
 		counter = size;
 	}
 
-	void push_back(const T& value) { data[counter++] = value; }
-	void push_back(T&& value) { data[counter++] = std::move(value); }
-	void pop_back() { --counter; }
+	void push_back(const T& value) { ASSERT_TRUE(counter < data.size()); data[counter++] = value; }
+	void push_back(T&& value) { ASSERT_TRUE(counter < data.size()); data[counter++] = std::move(value); }
+	void pop_back() { ASSERT_TRUE(counter > 0); --counter; }
 
 	void remove(iterator iter) {
 		std::swap(*iter, back());

@@ -29,7 +29,7 @@ private:
 	fast_set added_vertices;
 
 public:
-	vertex_marker(size_t size) : current(size), next(size), added_vertices(size) {};
+	explicit vertex_marker(size_t size) : current(size), next(size), added_vertices(size) {};
 
 	void add(NodeID vertex) {
 		if (!added_vertices.get(vertex)) {
@@ -67,8 +67,8 @@ public:
 };
 
 struct general_reduction {
-	general_reduction(size_t n) : marker(n) {}
-	virtual ~general_reduction() {}
+	explicit general_reduction(size_t n) : marker(n) {}
+	virtual ~general_reduction() = default;
 	virtual general_reduction* clone() const = 0;
 
 	virtual reduction_type get_reduction_type() const = 0;
@@ -81,7 +81,7 @@ struct general_reduction {
 };
 
 struct neighborhood_reduction : public general_reduction {
-	neighborhood_reduction(size_t n) : general_reduction(n) {}
+	explicit neighborhood_reduction(size_t n) : general_reduction(n) {}
 	~neighborhood_reduction() {}
 	virtual neighborhood_reduction* clone() const final { return new neighborhood_reduction(*this); }
 
@@ -90,7 +90,7 @@ struct neighborhood_reduction : public general_reduction {
 };
 
 struct clique_neighborhood_reduction_fast : public general_reduction {
-	clique_neighborhood_reduction_fast(size_t n) : general_reduction(n) {}
+	explicit clique_neighborhood_reduction_fast(size_t n) : general_reduction(n) {}
 	~clique_neighborhood_reduction_fast() {}
 	virtual clique_neighborhood_reduction_fast* clone() const final { return new clique_neighborhood_reduction_fast(*this); }
 
@@ -99,7 +99,7 @@ struct clique_neighborhood_reduction_fast : public general_reduction {
 };
 
 struct clique_neighborhood_reduction : public general_reduction {
-	clique_neighborhood_reduction(size_t n) : general_reduction(n) {}
+	explicit clique_neighborhood_reduction(size_t n) : general_reduction(n) {}
 	~clique_neighborhood_reduction() {}
 	virtual clique_neighborhood_reduction* clone() const final { return new clique_neighborhood_reduction(*this); }
 
@@ -109,13 +109,13 @@ struct clique_neighborhood_reduction : public general_reduction {
 	bool partition_into_cliques(NodeID v);
 	bool expand_clique(NodeID max_neighbor, sized_vector<NodeID>& neighbors_vec, fast_set& clique_neighbors_set);
 
-	branch_and_reduce_algorithm* br_alg;
-	NodeWeight target_weight;
-	NodeWeight neighbor_weights;
+	branch_and_reduce_algorithm* br_alg{};
+	NodeWeight target_weight{};
+	NodeWeight neighbor_weights{};
 };
 
 struct critical_set_reduction : public general_reduction {
-	critical_set_reduction(size_t n) : general_reduction(n) {}
+	explicit critical_set_reduction(size_t n) : general_reduction(n) {}
 	~critical_set_reduction() {}
 	virtual critical_set_reduction* clone() const final { return new critical_set_reduction(*this); }
 
@@ -124,7 +124,7 @@ struct critical_set_reduction : public general_reduction {
 };
 
 struct fold2_reduction : public general_reduction {
-	fold2_reduction(size_t n) : general_reduction(n) {}
+	explicit fold2_reduction(size_t n) : general_reduction(n) {}
 	~fold2_reduction() {}
 	virtual fold2_reduction* clone() const final { return new fold2_reduction(*this); }
 
@@ -152,8 +152,8 @@ private:
 };
 
 struct clique_reduction : public general_reduction {
-	clique_reduction(size_t n) : general_reduction(n) {}
-	~clique_reduction() {}
+	explicit clique_reduction(size_t n) : general_reduction(n) {}
+	~clique_reduction() override {}
 	virtual clique_reduction* clone() const final { return new clique_reduction(*this); }
 
 	virtual reduction_type get_reduction_type() const final { return reduction_type::clique; }
@@ -181,7 +181,7 @@ private:
 };
 
 struct twin_reduction : public general_reduction {
-	twin_reduction(size_t n) : general_reduction(n) {}
+	explicit twin_reduction(size_t n) : general_reduction(n) {}
 	~twin_reduction() {}
 	virtual twin_reduction* clone() const final { return new twin_reduction(*this); }
 
@@ -202,7 +202,7 @@ private:
 };
 
 struct domination_reduction : public general_reduction {
-	domination_reduction(size_t n) : general_reduction(n) {}
+	explicit domination_reduction(size_t n) : general_reduction(n) {}
 	~domination_reduction() {}
 	virtual domination_reduction* clone() const final { return new domination_reduction(*this); }
 
@@ -211,7 +211,7 @@ struct domination_reduction : public general_reduction {
 };
 
 struct generalized_neighborhood_reduction : public general_reduction {
-	generalized_neighborhood_reduction(size_t n) : general_reduction(n) {}
+	explicit generalized_neighborhood_reduction(size_t n) : general_reduction(n) {}
 	~generalized_neighborhood_reduction() {}
 	virtual generalized_neighborhood_reduction* clone() const final { return new generalized_neighborhood_reduction(*this); }
 
@@ -220,7 +220,7 @@ struct generalized_neighborhood_reduction : public general_reduction {
 };
 
 struct generalized_fold_reduction : public general_reduction {
-	generalized_fold_reduction(size_t n) : general_reduction(n) {}
+	explicit generalized_fold_reduction(size_t n) : general_reduction(n) {}
 	~generalized_fold_reduction() {}
 	virtual generalized_fold_reduction* clone() const final { return new generalized_fold_reduction(*this); }
 
@@ -263,16 +263,17 @@ struct reduction_ptr {
 	reduction_ptr(const reduction_ptr& other) : reduction(other.reduction->clone()) {};
 
 	reduction_ptr& operator=(const reduction_ptr& other) {
+        if(&other == this) {return *this;}
 		release();
 		reduction = other.reduction->clone();
 		return *this;
 	};
 
-	reduction_ptr(reduction_ptr&& other) : reduction(std::move(other.reduction)) {
+	reduction_ptr(reduction_ptr&& other)  noexcept : reduction(std::move(other.reduction)) {
 		other.reduction = nullptr;
 	};
 
-	reduction_ptr& operator=(reduction_ptr&& other) {
+	reduction_ptr& operator=(reduction_ptr&& other)  noexcept {
 		reduction = std::move(other.reduction);
 		other.reduction = nullptr;
 		return *this;

@@ -343,7 +343,10 @@ bool fold2_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 void fold2_reduction::fold(branch_and_reduce_algorithm* br_alg, const fold_nodes& nodes) {
 	auto& status = br_alg->status;
 	auto& neighbors = br_alg->set_1;
+    ASSERT_TRUE(status.lb_is_weight >= (status.is_weight + status.reduction_offset));
 
+    //std::cout << "fold: " << nodes.rest[1] << ", " << nodes.rest[0] << std::endl;
+    status.lb_is_weight += status.weights[nodes.main]; // due to reduction offset
 	br_alg->set(nodes.rest[1], IS_status::folded, false);
 	br_alg->set(nodes.rest[0], IS_status::folded, true);
 
@@ -369,18 +372,51 @@ void fold2_reduction::fold(branch_and_reduce_algorithm* br_alg, const fold_nodes
 	status.graph[nodes.main] = dynamic_graph::neighbor_list(std::move(new_neighbors));
 	status.folded_queue.push_back(get_reduction_type());
 
+    status.modified_lb_queue.push_back(br_alg->BRANCHING_TOKEN);
+    if(status.lb_node_status[nodes.main] == IS_status::included) {
+        // exclude folded vertex to prevent conflicts
+        status.lb_node_status[nodes.main] = IS_status::excluded;
+        status.lb_is_weight -= restore_vec.back().main_weight;
+        status.modified_lb_queue.push_back(nodes.main);
+    }
+
 	br_alg->add_next_level_node(nodes.main);
 	br_alg->add_next_level_neighborhood(nodes.main);
+
+    ASSERT_TRUE(status.lb_is_weight >= (status.is_weight + status.reduction_offset));
 }
 
 void fold2_reduction::restore(branch_and_reduce_algorithm* br_alg) {
 	auto& status = br_alg->status;
 	auto& data = restore_vec.back();
 
+    auto restore_lb = br_alg->best_weight > status.is_weight + status.reduction_offset;
+    if(status.maintain_lb) {
+        if (restore_lb) {
+            if (status.modified_lb_queue.back() == data.nodes.main) {
+                // node was forced into lb solution, restore it
+                status.lb_node_status[data.nodes.main] = IS_status::included;
+                status.lb_is_weight += data.main_weight;
+                status.modified_lb_queue.pop_back();
+            }
+            status.lb_is_weight -= data.main_weight; // restore reduction offset
+            ASSERT_TRUE(status.modified_lb_queue.back() == br_alg->BRANCHING_TOKEN);
+            status.modified_lb_queue.pop_back();
+        } else {
+            if (status.modified_lb_queue.back() == data.nodes.main) {
+                // node was forced into lb solution, keep it this way
+                status.modified_lb_queue.pop_back();
+            }
+            ASSERT_TRUE(status.modified_lb_queue.back() == br_alg->BRANCHING_TOKEN);
+            status.modified_lb_queue.pop_back();
+        }
+    }
+
 	// is "restored" in following loop
 	status.graph.hide_node(data.nodes.main);
 	status.graph[data.nodes.main] = std::move(data.main_neighbor_list);
 
+    //std::cout << "un-fold: " << data.nodes.rest[0] << ", " << data.nodes.rest[1] << std::endl;
 	for (size_t i = 0; i < 2; i++) {
 		br_alg->unset(data.nodes.rest[i]);
 
@@ -392,6 +428,27 @@ void fold2_reduction::restore(branch_and_reduce_algorithm* br_alg) {
 	status.weights[data.nodes.main] = data.main_weight;
 	status.reduction_offset -= data.main_weight;
 
+    if(status.maintain_lb) {
+        if (!restore_lb) {
+            // restore lb according to 'new' best solution
+            // note: this is not necessarily done in fold2::apply, e.g. when we call reverse_branching then only fold2::restore is called
+
+            // neighbors should be excluded since it holds !restore_lb and therefore unset would not undo their exclude
+            ASSERT_TRUE(status.lb_node_status[data.nodes.rest[0]] == IS_status::excluded);
+            ASSERT_TRUE(status.lb_node_status[data.nodes.rest[1]] == IS_status::excluded);
+            if (status.lb_node_status[data.nodes.main] == IS_status::included) {
+                status.lb_node_status[data.nodes.main] = IS_status::excluded;
+                status.lb_node_status[data.nodes.rest[0]] = IS_status::included;
+                status.lb_node_status[data.nodes.rest[1]] = IS_status::included;
+            }else {
+                ASSERT_TRUE(status.lb_node_status[data.nodes.main] == IS_status::excluded);
+                status.lb_node_status[data.nodes.main] = IS_status::included;
+                status.lb_node_status[data.nodes.rest[0]] = IS_status::excluded;
+                status.lb_node_status[data.nodes.rest[1]] = IS_status::excluded;
+            }
+        }
+    }
+
 	restore_vec.pop_back();
 }
 
@@ -399,7 +456,7 @@ void fold2_reduction::apply(branch_and_reduce_algorithm* br_alg) {
 #ifndef NDEBUG
     NodeWeight previous_is_weight = br_alg->status.is_weight + br_alg->status.reduction_offset;
 #endif
-    std::cerr << "applying fold2" << std::endl;
+    //std::cerr << "applying fold2" << std::endl;
 
 	auto& status = br_alg->status;
 	auto nodes = restore_vec.back().nodes;
@@ -411,6 +468,12 @@ void fold2_reduction::apply(branch_and_reduce_algorithm* br_alg) {
 		status.node_status[nodes.rest[0]] = IS_status::included;
 		status.node_status[nodes.rest[1]] = IS_status::included;
 
+        if(status.maintain_lb) {
+            ASSERT_TRUE(status.lb_node_status[nodes.main] == IS_status::included);
+            status.lb_node_status[nodes.main] = IS_status::excluded;
+            status.lb_node_status[nodes.rest[0]] = IS_status::included;
+            status.lb_node_status[nodes.rest[1]] = IS_status::included;
+        }
 		// weight of folded vertex: status.is_weight += status.weights[nodes.rest[0]] + status.weights[nodes.rest[1]];
         // status.weights[nodes.rest[0]] + status.weights[nodes.rest[1]] - status.weights[nodes.main]
         //   was already added to is_weight when including nodes.main as folded vertex
@@ -420,6 +483,15 @@ void fold2_reduction::apply(branch_and_reduce_algorithm* br_alg) {
 		status.node_status[nodes.main] = IS_status::included;
 		status.node_status[nodes.rest[0]] = IS_status::excluded;
 		status.node_status[nodes.rest[1]] = IS_status::excluded;
+
+        if(status.maintain_lb) {
+            ASSERT_TRUE(status.lb_node_status[nodes.main] == IS_status::excluded);
+            ASSERT_TRUE(status.lb_node_status[nodes.rest[0]] == IS_status::excluded);
+            ASSERT_TRUE(status.lb_node_status[nodes.rest[1]] == IS_status::excluded);
+            status.lb_node_status[nodes.main] = IS_status::included;
+            status.lb_node_status[nodes.rest[0]] = IS_status::excluded;
+            status.lb_node_status[nodes.rest[1]] = IS_status::excluded;
+        }
 
 		status.is_weight += status.weights[nodes.main];
 	}
@@ -528,19 +600,30 @@ bool clique_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 
 void clique_reduction::fold(branch_and_reduce_algorithm* br_alg, const weighted_node& isolated, std::vector<NodeID>&& non_isolated) {
 	auto& status = br_alg->status;
+    ASSERT_TRUE(status.lb_is_weight >= (status.is_weight + status.reduction_offset));
 
 	br_alg->set(isolated.node, IS_status::folded);
 	status.reduction_offset += isolated.weight;
 
+    //status.modified_lb_queue.push_back(br_alg->BRANCHING_TOKEN);
 	for (auto node : non_isolated) {
 		status.weights[node] -= isolated.weight;
 		br_alg->add_next_level_neighborhood(node);
+
+
+        if(status.lb_node_status[node] == IS_status::included) {
+            // happens at most once (clique)
+            status.lb_is_weight -= isolated.weight;
+        }
 	}
+    status.lb_is_weight += isolated.weight;
 
 	status.folded_queue.push_back(get_reduction_type());
 	br_alg->add_next_level_neighborhood(non_isolated);
 
 	restore_vec.emplace_back(isolated, std::move(non_isolated));
+
+    ASSERT_TRUE(status.lb_is_weight >= (status.is_weight + status.reduction_offset));
 }
 
 void clique_reduction::restore(branch_and_reduce_algorithm* br_alg) {
@@ -552,6 +635,9 @@ void clique_reduction::restore(branch_and_reduce_algorithm* br_alg) {
 
 	for (auto node : data.non_isolated) {
 		status.weights[node] += data.isolated.weight;
+        if(status.maintain_lb && status.lb_node_status[node] == IS_status::included) {
+            status.lb_is_weight += data.isolated.weight;
+        }
 	}
 
 	restore_vec.pop_back();
@@ -560,6 +646,8 @@ void clique_reduction::restore(branch_and_reduce_algorithm* br_alg) {
 void clique_reduction::apply(branch_and_reduce_algorithm* br_alg) {
 	auto& status = br_alg->status;
 	auto isolated = restore_vec.back().isolated.node;
+
+    ASSERT_TRUE(status.is_weight + status.reduction_offset >= br_alg->best_weight);
 
 	bool set_isolated = true;
 
@@ -576,9 +664,21 @@ void clique_reduction::apply(branch_and_reduce_algorithm* br_alg) {
 
 	if (set_isolated) {
 		status.node_status[isolated] = IS_status::included;
+        if(status.maintain_lb) {
+            if(status.lb_node_status[isolated] == IS_status::excluded) {
+                status.lb_node_status[isolated] = IS_status::included;
+                status.lb_is_weight += status.weights[isolated];
+            }
+        }
 	}
 	else {
 		status.node_status[isolated] = IS_status::excluded;
+        if(status.maintain_lb) {
+            if(status.lb_node_status[isolated] == IS_status::included) {
+                status.lb_node_status[isolated] = IS_status::excluded;
+                status.lb_is_weight -= status.weights[isolated];
+            }
+        }
 	}
 }
 
@@ -655,24 +755,40 @@ bool twin_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 
 void twin_reduction::fold(branch_and_reduce_algorithm* br_alg, NodeID main, NodeID twin) {
 	auto& status = br_alg->status;
+    ASSERT_TRUE(status.lb_is_weight >= (status.is_weight + status.reduction_offset));
 
 	restore_vec.push_back({ main, twin });
 
 	br_alg->set(twin, IS_status::folded, true);
 	status.weights[main] += status.weights[twin];
 
+    if(status.lb_node_status[main] == IS_status::included) {
+        ASSERT_TRUE(status.lb_node_status[twin] == IS_status::excluded);
+        status.lb_is_weight += status.weights[twin];
+    }
+
 	status.folded_queue.push_back(get_reduction_type());
 
 	br_alg->add_next_level_node(main);
 	br_alg->add_next_level_neighborhood(main);
+
+    ASSERT_TRUE(status.lb_is_weight >= (status.is_weight + status.reduction_offset));
 }
 
 void twin_reduction::restore(branch_and_reduce_algorithm* br_alg) {
 	auto& status = br_alg->status;
 	auto& data = restore_vec.back();
 
+    if(status.maintain_lb) {
+        if(status.lb_node_status[data.main] == IS_status::included) {
+            status.lb_is_weight -= status.weights[twin];
+        }
+    }
+
 	br_alg->unset(data.twin);
 	status.weights[data.main] -= status.weights[data.twin];
+
+    // TODO if !restore_lb, include twin if main is included in lb solution
 
 	restore_vec.pop_back();
 }
@@ -686,8 +802,20 @@ void twin_reduction::apply(branch_and_reduce_algorithm* br_alg) {
 
 	if (status.node_status[main] == IS_status::included) {
 		status.node_status[twin] = IS_status::included;
+
+        ASSERT_TRUE(status.lb_node_status[main] == IS_status::included);
+        if(status.lb_node_status[twin] == IS_status::excluded) {
+            status.lb_is_weight += status.weights[twin];
+            status.lb_node_status[twin] = IS_status::included;
+        }
 	} else {
 		status.node_status[twin] = IS_status::excluded;
+
+        ASSERT_TRUE(status.lb_node_status[main] == IS_status::excluded);
+        if(status.lb_node_status[twin] == IS_status::included) {
+            status.lb_is_weight -= status.weights[twin];
+            status.lb_node_status[twin] = IS_status::excluded;
+        }
 	}
 }
 
@@ -988,11 +1116,14 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 
 void generalized_fold_reduction::fold(branch_and_reduce_algorithm* br_alg, NodeID main_node, fast_set& MWIS_set, NodeWeight MWIS_weight) {
 	auto& status = br_alg->status;
+    ASSERT_TRUE(status.lb_is_weight >= (status.is_weight + status.reduction_offset));
 
 	restore_vec.emplace_back();
 	restore_data& data = restore_vec.back();
 	data.main_weight = status.weights[main_node];
 	data.MWIS_weight = MWIS_weight;
+
+    status.lb_is_weight += status.weights[main_node]; // due to reduction offset
 
 	auto& nodes = data.nodes;
 	nodes.main = main_node;
@@ -1043,13 +1174,45 @@ void generalized_fold_reduction::fold(branch_and_reduce_algorithm* br_alg, NodeI
 	status.graph[nodes.main] = dynamic_graph::neighbor_list(std::move(new_neighbors));
 	status.folded_queue.push_back(get_reduction_type());
 
+    status.modified_lb_queue.push_back(br_alg->BRANCHING_TOKEN);
+    if(status.lb_node_status[nodes.main] == IS_status::included) {
+        // exclude folded vertex to prevent conflicts
+        status.lb_node_status[nodes.main] = IS_status::excluded;
+        status.lb_is_weight -= restore_vec.back().main_weight;
+        status.modified_lb_queue.push_back(nodes.main);
+    }
+
 	br_alg->add_next_level_node(nodes.main);
 	br_alg->add_next_level_neighborhood(nodes.main);
+
+    ASSERT_TRUE(status.lb_is_weight >= (status.is_weight + status.reduction_offset));
 }
 
 void generalized_fold_reduction::restore(branch_and_reduce_algorithm* br_alg) {
 	auto& status = br_alg->status;
 	auto& data = restore_vec.back();
+
+    auto restore_lb = br_alg->best_weight > status.is_weight + status.reduction_offset;
+    if(status.maintain_lb) {
+        if (restore_lb) {
+            if (status.modified_lb_queue.back() == data.nodes.main) {
+                // node was forced into lb solution, restore it
+                status.lb_node_status[data.nodes.main] = IS_status::included;
+                status.lb_is_weight += data.main_weight;
+                status.modified_lb_queue.pop_back();
+            }
+            status.lb_is_weight -= data.main_weight; // restore reduction offset
+            ASSERT_TRUE(status.modified_lb_queue.back() == br_alg->BRANCHING_TOKEN);
+            status.modified_lb_queue.pop_back();
+        } else {
+            if (status.modified_lb_queue.back() == data.nodes.main) {
+                // node was forced into lb solution, keep it this way
+                status.modified_lb_queue.pop_back();
+            }
+            ASSERT_TRUE(status.modified_lb_queue.back() == br_alg->BRANCHING_TOKEN);
+            status.modified_lb_queue.pop_back();
+        }
+    }
 
 	// is "restored" in following loops
 	status.graph.hide_node(data.nodes.main);
@@ -1066,6 +1229,30 @@ void generalized_fold_reduction::restore(branch_and_reduce_algorithm* br_alg) {
 	status.weights[data.nodes.main] = data.main_weight;
 	status.reduction_offset -= data.main_weight;
 
+    if(status.maintain_lb) {
+        if (!restore_lb) {
+            // restore lb according to 'new' best solution
+            // note: this is not necessarily done in fold2::apply, e.g. when we call reverse_branching then only fold2::restore is called
+
+            // neighbors of data.main should be excluded since it holds !restore_lb and therefore unset would not undo their exclude
+            if (status.lb_node_status[data.nodes.main] == IS_status::included) {
+                status.lb_node_status[data.nodes.main] = IS_status::excluded;
+                for (auto node : data.nodes.MWIS) {
+                    status.node_status[node] = IS_status::included;
+                    ASSERT_TRUE(status.lb_node_status[data.nodes.main] == IS_status::excluded);
+                    status.lb_node_status[node] = IS_status::excluded;
+                }
+            }else {
+                ASSERT_TRUE(status.lb_node_status[data.nodes.main] == IS_status::excluded);
+                status.lb_node_status[data.nodes.main] = IS_status::included;
+                for (auto node : data.nodes.MWIS) {
+                    ASSERT_TRUE(status.lb_node_status[data.nodes.main] == IS_status::excluded);
+                    status.lb_node_status[node] = IS_status::excluded;
+                }
+            }
+        }
+    }
+
 	restore_vec.pop_back();
 }
 
@@ -1079,13 +1266,32 @@ void generalized_fold_reduction::apply(branch_and_reduce_algorithm* br_alg) {
 	if (main_status == IS_status::included) {
 		status.node_status[nodes.main] = IS_status::excluded;
 
+        if(status.maintain_lb) {
+            ASSERT_TRUE(status.lb_node_status[nodes.main] == IS_status::included);
+            status.lb_node_status[nodes.main] = IS_status::excluded;
+            for (auto node : nodes.MWIS) {
+                status.lb_node_status[node] = IS_status::included;
+            }
+        }
+
 		for (auto node : nodes.MWIS) {
 			status.node_status[node] = IS_status::included;
 		}
 
 		status.is_weight += status.weights[nodes.main]; //MWIS_weight;
+
 	} else {
 		status.node_status[nodes.main] = IS_status::included;
+
+        if(status.maintain_lb) {
+            ASSERT_TRUE(status.lb_node_status[nodes.main] == IS_status::excluded);
+            status.lb_node_status[nodes.main] = IS_status::included;
+            for (auto node : nodes.MWIS) {
+                status.node_status[node] = IS_status::included;
+                ASSERT_TRUE(status.lb_node_status[nodes.main] == IS_status::excluded);
+                status.lb_node_status[node] = IS_status::excluded;
+            }
+        }
 
 		for (auto node : nodes.MWIS) {
 			status.node_status[node] = IS_status::excluded;

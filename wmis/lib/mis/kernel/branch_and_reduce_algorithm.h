@@ -90,29 +90,30 @@ private:
 		dynamic_graph graph;
 		std::vector<NodeWeight> weights;
 		std::vector<IS_status> node_status;
-                std::vector<IS_status> lb_node_status;
-                NodeWeight lb_is_weight = 0;
+        std::vector<IS_status> lb_node_status;
+        NodeWeight lb_is_weight = 0;
+        bool maintain_lb = true;
 		std::vector<reduction_ptr> reductions;
 		sized_vector<reduction_type> folded_queue;
 		sized_vector<node_pos> branching_queue;
 		sized_vector<NodeID> modified_queue;
-                sized_vector<NodeID> modified_lb_queue;
+        sized_vector<NodeID> modified_lb_queue;
 
 		graph_status() = default;
 
-		graph_status(graph_access& G) :
+		explicit graph_status(graph_access& G) :
 			n(G.number_of_nodes()), remaining_nodes(n), graph(G), weights(n, 0), node_status(n, IS_status::not_set), lb_node_status(n, IS_status::excluded),
-			folded_queue(n), branching_queue(n), modified_queue(n + 1), modified_lb_queue(n + 1) {
+			folded_queue(n), branching_queue(n), modified_queue(n + 1), modified_lb_queue(3*n) {
 
 			forall_nodes(G, node) {
 				weights[node] = G.getNodeWeight(node);
 			} endfor
-                        forall_nodes(G, node) {
-                                if(G.getPartitionIndex(node) == 1) {
-                                  lb_node_status[node] = IS_status::included;
-                                  lb_is_weight += G.getNodeWeight(node);
-                                }
-                        } endfor
+            forall_nodes(G, node) {
+                    if(G.getPartitionIndex(node) == 1) {
+                      lb_node_status[node] = IS_status::included;
+                      lb_is_weight += G.getNodeWeight(node);
+                    }
+            } endfor
 		}
 	};
 
@@ -126,6 +127,7 @@ private:
 
 	// lower graph size limit for when to use ils pruning
 	static constexpr size_t ILS_SIZE_LIMIT = 50;
+    static constexpr size_t LB_SIZE_LIMIT = 0;
 
 	// min number of remaining nodes to split up connected components
 	static constexpr size_t SPLIT_CC_LIMIT = 100;
@@ -206,11 +208,13 @@ private:
 public:
 	branch_and_reduce_algorithm(graph_access& G, const MISConfig& config, bool called_from_fold = false);
 
+    bool use_ILS_at_this_top_level = true;
+
 	void reduce_graph();
 	bool run_branch_reduce();
 
-	static size_t run_ils(const MISConfig& config, graph_access& G, sized_vector<NodeID>& tmp_buffer, size_t max_swaps);
-	static void greedy_initial_is(graph_access& G, sized_vector<NodeID>& tmp_buffer);
+	static size_t run_ils(const MISConfig& config, graph_access& G, sized_vector<NodeID>& tmp_buffer, size_t max_swaps, bool use_ILS=true);
+	static bool greedy_initial_is(graph_access& G, sized_vector<NodeID>& tmp_buffer);
 
 	NodeWeight get_current_is_weight() const;
 	void reverse_reduction(graph_access & G, graph_access & reduced_G, std::vector<NodeID> & reverse_mapping);
