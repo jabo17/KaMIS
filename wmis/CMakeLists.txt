@@ -11,6 +11,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     add_compile_options(-O3)
 else()
     add_compile_options(-g)
+    add_compile_options(-fsanitize=address)
 endif()
 
 set(CMAKE_CXX_STANDARD 14)
