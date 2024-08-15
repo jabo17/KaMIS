@@ -86,6 +86,13 @@ int main(int argn, char **argv) {
 
         mis_log::instance()->set_graph(G);
 
+        if(mis_config.warm_start) {
+            int err = graph_io::readPartition(G, mis_config.input_filename);
+            if(err) {
+                abort();
+            }
+        }
+
         //std::cout << "%nodes " << G.number_of_nodes() << std::endl;
         //std::cout << "%edges " << G.number_of_edges() << std::endl;
 
@@ -93,7 +100,7 @@ int main(int argn, char **argv) {
 
         branch_and_reduce_algorithm reducer(G, mis_config);
         reducer.run_branch_reduce();
-        NodeWeight MWIS_weight = reducer.get_current_is_weight();
+        NodeWeight MWIS_weight = reducer.get_is_weight();
 
         auto end = std::chrono::system_clock::now();
 

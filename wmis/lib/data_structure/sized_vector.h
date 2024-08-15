@@ -19,7 +19,7 @@ public:
 	using iterator = std::vector<NodeID>::iterator;
 	using const_iterator = std::vector<NodeID>::const_iterator;
 
-	sized_vector(size_t min_capacity = 0) : data(min_capacity) { }
+	explicit sized_vector(size_t min_capacity = 0) : data(min_capacity) { }
 	sized_vector(size_t min_capacity, const T& value) : data(min_capacity, value) { }
 
 
@@ -28,7 +28,7 @@ public:
 	T& back() { return data[counter - 1]; }
 	const T& operator[] (size_t index) const { return data[index]; }
 	const T& front() const { return data[0]; }
-	const T& back() const { return data[counter - 1]; }
+	const T& back() const { ASSERT_TRUE(counter > 0); return data[counter - 1]; }
 
 	iterator begin() { return data.begin(); }
 	iterator end() { return data.begin() + counter; }
@@ -61,9 +61,13 @@ public:
 		counter = size;
 	}
 
-	void push_back(const T& value) { data[counter++] = value; }
-	void push_back(T&& value) { data[counter++] = std::move(value); }
-	void pop_back() { --counter; }
+	void push_back(const T& value) { data[counter++] = value;
+        ASSERT_TRUE(counter <= data.size()); }
+	void push_back(T&& value) {
+        data[counter++] = std::move(value);
+        ASSERT_TRUE(counter <= data.size());
+    }
+	void pop_back() { ASSERT_TRUE(counter >= 1); --counter; }
 
 	void remove(iterator iter) {
 		std::swap(*iter, back());
@@ -83,6 +87,7 @@ public:
 	template <class... Args>
 	void emplace_back(Args&&... args) {
 		data[counter++] = T(std::forward<Args>(args)...);
+        ASSERT_TRUE(counter <= data.size());
 	}
 
 	void swap(sized_vector & other) {

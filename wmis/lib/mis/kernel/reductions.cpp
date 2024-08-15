@@ -369,6 +369,8 @@ void fold2_reduction::fold(branch_and_reduce_algorithm* br_alg, const fold_nodes
 	status.graph[nodes.main] = dynamic_graph::neighbor_list(std::move(new_neighbors));
 	status.folded_queue.push_back(get_reduction_type());
 
+    br_alg->set_lb(nodes.main, IS_status::excluded);
+
 	br_alg->add_next_level_node(nodes.main);
 	br_alg->add_next_level_neighborhood(nodes.main);
 }
@@ -380,6 +382,10 @@ void fold2_reduction::restore(branch_and_reduce_algorithm* br_alg) {
 	// is "restored" in following loop
 	status.graph.hide_node(data.nodes.main);
 	status.graph[data.nodes.main] = std::move(data.main_neighbor_list);
+
+    if(!status.is_best_sol) {
+        br_alg->unset_lb(data.nodes.main);
+    }
 
 	for (size_t i = 0; i < 2; i++) {
 		br_alg->unset(data.nodes.rest[i]);
@@ -406,7 +412,7 @@ void fold2_reduction::apply(branch_and_reduce_algorithm* br_alg) {
 		status.node_status[nodes.rest[0]] = IS_status::included;
 		status.node_status[nodes.rest[1]] = IS_status::included;
 
-		status.is_weight += status.weights[nodes.rest[0]] + status.weights[nodes.rest[1]];
+		status.is_weight += status.weights[nodes.main];
 	} else {
 		status.node_status[nodes.main] = IS_status::included;
 		status.node_status[nodes.rest[0]] = IS_status::excluded;
@@ -414,6 +420,13 @@ void fold2_reduction::apply(branch_and_reduce_algorithm* br_alg) {
 
 		status.is_weight += status.weights[nodes.main];
 	}
+
+    if(status.apply_to_lb) {
+        auto &lb_node_status = br_alg->best_solution_status.lb_node_status;
+        lb_node_status[nodes.main] = status.node_status[nodes.main];
+        lb_node_status[nodes.rest[0]] = status.node_status[nodes.rest[0]];
+        lb_node_status[nodes.rest[1]] = status.node_status[nodes.rest[1]];
+    }
 }
 
 bool clique_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
@@ -568,6 +581,11 @@ void clique_reduction::apply(branch_and_reduce_algorithm* br_alg) {
 	else {
 		status.node_status[isolated] = IS_status::excluded;
 	}
+
+    if(status.apply_to_lb) {
+        auto &lb_node_status = br_alg->best_solution_status.lb_node_status;
+        lb_node_status[isolated] = status.node_status[isolated];
+    }
 }
 
 bool twin_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
@@ -677,6 +695,11 @@ void twin_reduction::apply(branch_and_reduce_algorithm* br_alg) {
 	} else {
 		status.node_status[twin] = IS_status::excluded;
 	}
+
+    if(status.apply_to_lb) {
+        auto &lb_node_status = br_alg->best_solution_status.lb_node_status;
+        lb_node_status[twin] = status.node_status[twin];
+    }
 }
 
 bool domination_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
@@ -780,7 +803,7 @@ bool generalized_neighborhood_reduction::reduce(branch_and_reduce_algorithm* br_
 				continue;
 			}
 
-			if (status.weights[v] >= neighborhood_br_alg.get_current_is_weight())
+			if (status.weights[v] >= neighborhood_br_alg.get_is_weight())
 				br_alg->set(v, IS_status::included);
 		}
 	}
@@ -845,7 +868,7 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 				continue;
 			}
 
-			NodeWeight MWIS_weight = neighborhood_br_alg.get_current_is_weight();
+			NodeWeight MWIS_weight = neighborhood_br_alg.get_is_weight();
 			NodeWeight min_MWIS_neighbor_weight = std::numeric_limits<NodeWeight>::max();
 
 			if (status.weights[v] >= MWIS_weight) {
@@ -889,7 +912,7 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 					std::cerr << "%generalized_fold_reduction br_call loop time out" << std::endl;
 					check_failed = true;
 				}
-				else if (neighborhood_br_alg.get_current_is_weight() >= status.weights[v]) {
+				else if (neighborhood_br_alg.get_is_weight() >= status.weights[v]) {
 					check_failed = true;
 				}
 
@@ -942,7 +965,7 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 					}
 					else {
 						// if the weight of every MWIS in N(v) which contains "node" is smaller than w(v) then we can remove "node"
-						remove_node = neighborhood_br_alg.get_current_is_weight() + status.weights[node] <= status.weights[v];
+						remove_node = neighborhood_br_alg.get_is_weight() + status.weights[node] <= status.weights[v];
 					}
 
 					for (const NodeID neighbor : status.graph[node]) {
@@ -1031,6 +1054,8 @@ void generalized_fold_reduction::fold(branch_and_reduce_algorithm* br_alg, NodeI
 	status.graph[nodes.main] = dynamic_graph::neighbor_list(std::move(new_neighbors));
 	status.folded_queue.push_back(get_reduction_type());
 
+    br_alg->set_lb(nodes.main, IS_status::excluded);
+
 	br_alg->add_next_level_node(nodes.main);
 	br_alg->add_next_level_neighborhood(nodes.main);
 }
@@ -1042,6 +1067,10 @@ void generalized_fold_reduction::restore(branch_and_reduce_algorithm* br_alg) {
 	// is "restored" in following loops
 	status.graph.hide_node(data.nodes.main);
 	status.graph[data.nodes.main] = std::move(data.main_neighbor_list);
+
+    if(!status.is_best_sol) {
+        br_alg->unset_lb(data.nodes.main);
+    }
 
 	for (size_t i = 0; i < data.nodes.MWIS.size(); i++) {
 		br_alg->unset(data.nodes.MWIS[i]);
@@ -1071,7 +1100,7 @@ void generalized_fold_reduction::apply(branch_and_reduce_algorithm* br_alg) {
 			status.node_status[node] = IS_status::included;
 		}
 
-		status.is_weight += MWIS_weight;
+		status.is_weight +=  status.weights[nodes.main];
 	} else {
 		status.node_status[nodes.main] = IS_status::included;
 
@@ -1081,4 +1110,12 @@ void generalized_fold_reduction::apply(branch_and_reduce_algorithm* br_alg) {
 
 		status.is_weight += status.weights[nodes.main];
 	}
+
+    if(status.apply_to_lb) {
+        auto &lb_node_status = br_alg->best_solution_status.lb_node_status;
+        lb_node_status[nodes.main] = status.node_status[nodes.main];
+        for (auto node : nodes.MWIS) {
+            lb_node_status[node] = status.node_status[node];
+        }
+    }
 }

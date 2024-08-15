@@ -31,6 +31,7 @@ int parse_parameters(int argn, char **argv,
     struct arg_int *user_seed           = arg_int0(NULL, "seed", NULL, "Seed to use for the PRNG.");
     struct arg_str *filename            = arg_strn(NULL, NULL, "FILE", 1, 1, "Path to graph file.");
     struct arg_str *output              = arg_str0(NULL, "output", NULL, "Path to store resulting independent set.");
+    struct arg_str *input               = arg_str0(NULL, "input", NULL, "Path to initial independent set.");
     struct arg_dbl *time_limit          = arg_dbl0(NULL, "time_limit", NULL, "Time limit in s. Default 1000s.");
     struct arg_lit *console_log         = arg_lit0(NULL, "console_log", "Stream the log into the console");
     struct arg_lit *disable_checks      = arg_lit0(NULL, "disable_checks", "Disable sortedness check during I/O.");
@@ -46,6 +47,7 @@ int parse_parameters(int argn, char **argv,
             help,
             filename,
             output,
+            input,
             user_seed,
             time_limit,
             console_log,
@@ -123,6 +125,13 @@ int parse_parameters(int argn, char **argv,
         mis_config.write_graph = true;
     } else {
         mis_config.write_graph = false;
+    }
+
+    if (input->count > 0) {
+        mis_config.input_filename = input->sval[0];
+        mis_config.warm_start = true;
+    }else{
+        mis_config.warm_start = false;
     }
 
     arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));

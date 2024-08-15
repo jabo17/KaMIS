@@ -90,6 +90,10 @@ private:
 		dynamic_graph graph;
 		std::vector<NodeWeight> weights;
 		std::vector<IS_status> node_status;
+        std::vector<IS_status> lb_node_status;
+        bool apply_to_lb = false;
+        bool is_best_sol = false;
+        sized_vector<std::pair<NodeID, IS_status>> lb_modified;
 		std::vector<reduction_ptr> reductions;
 		sized_vector<reduction_type> folded_queue;
 		sized_vector<node_pos> branching_queue;
@@ -97,13 +101,18 @@ private:
 
 		graph_status() = default;
 
-		graph_status(graph_access& G) :
-			n(G.number_of_nodes()), remaining_nodes(n), graph(G), weights(n, 0), node_status(n, IS_status::not_set),
-			folded_queue(n), branching_queue(n), modified_queue(n + 1) {
+		explicit graph_status(graph_access& G) :
+			n(G.number_of_nodes()), remaining_nodes(n), graph(G), weights(n, 0), node_status(n, IS_status::not_set), lb_node_status(n, IS_status::not_set),
+			folded_queue(n), branching_queue(n), modified_queue(n + 1), lb_modified(2*n) {
 
 			forall_nodes(G, node) {
 				weights[node] = G.getNodeWeight(node);
 			} endfor
+            forall_nodes(G, node) {
+                    if(G.getPartitionIndex(node) == 1) {
+                        lb_node_status[node] = IS_status::included;
+                    }
+            } endfor
 		}
 	};
 
@@ -184,12 +193,15 @@ private:
 
 	void update_best_solution();
 	void reverse_branching();
+    void apply_branching();
 	void restore_best_local_solution();
 	void restore_best_global_solution();
 
 	void build_global_graph_access();
 	void build_induced_neighborhood_subgraph(graph_access& G, NodeID source_node);
 	void build_induced_subgraph(graph_access& G, const sized_vector<NodeID>& nodes, const fast_set& nodes_set, sized_vector<NodeID>& reverse_mapping);
+
+    NodeWeight get_current_is_weight() const;
 
 	void disable_cout();
 	void enable_cout();
@@ -203,11 +215,17 @@ public:
 	static size_t run_ils(const MISConfig& config, graph_access& G, sized_vector<NodeID>& tmp_buffer, size_t max_swaps);
 	static void greedy_initial_is(graph_access& G, sized_vector<NodeID>& tmp_buffer);
 
-	NodeWeight get_current_is_weight() const;
+
 	void reverse_reduction(graph_access & G, graph_access & reduced_G, std::vector<NodeID> & reverse_mapping);
 	void apply_branch_reduce_solution(graph_access & G);
 
 	void build_graph_access(graph_access& G, std::vector<NodeID>& reverse_mapping) const;
+
+    void set_lb(NodeID node, IS_status mis_status);
+
+    void unset_lb(NodeID node);
+
+    NodeWeight get_is_weight() const;
 };
 
 #endif //BRANCH_AND_REDUCE_SOLVER_H
