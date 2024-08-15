@@ -906,13 +906,13 @@ bool generalized_fold_reduction::reduce(branch_and_reduce_algorithm* br_alg) {
 				neighbors_set.remove(neighbor);
 
 				br_alg->build_induced_subgraph(neighborhood_graph, neighbors, neighbors_set, reverse_mapping);
-				branch_and_reduce_algorithm neighborhood_br_alg(neighborhood_graph, config, true);
+				branch_and_reduce_algorithm neighborhood_br_alg2(neighborhood_graph, config, true);
 
-				if (!neighborhood_br_alg.run_branch_reduce()) {
+				if (!neighborhood_br_alg2.run_branch_reduce()) {
 					std::cerr << "%generalized_fold_reduction br_call loop time out" << std::endl;
 					check_failed = true;
 				}
-				else if (neighborhood_br_alg.get_is_weight() >= status.weights[v]) {
+				else if (neighborhood_br_alg2.get_is_weight() >= status.weights[v]) {
 					check_failed = true;
 				}
 

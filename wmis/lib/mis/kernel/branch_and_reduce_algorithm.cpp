@@ -21,12 +21,15 @@ branch_and_reduce_algorithm::branch_and_reduce_algorithm(graph_access& G, const 
 	: config(config), global_status(G), set_1(global_status.n), set_2(global_status.n), double_set(global_status.n * 2), buffers(2, sized_vector<NodeID>(global_status.n)) {
 
 	if (called_from_fold) {
-		global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction>(global_status.n);
+		// global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction>(global_status.n);
+        global_status.reductions = make_reduction_vector<neighborhood_reduction, clique_reduction, domination_reduction, twin_reduction>(global_status.n);
 	} else if (config.reduction_style == MISConfig::Reduction_Style::DENSE) {
-		global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, generalized_fold_reduction>(global_status.n);
+		// global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, generalized_fold_reduction>(global_status.n);
+        global_status.reductions = make_reduction_vector<neighborhood_reduction, clique_reduction, domination_reduction, twin_reduction>(global_status.n);
 	} else {
 		// MISConfig::Reduction_Style::NORMAL
-		global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction, generalized_fold_reduction>(global_status.n);
+		// global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction, generalized_fold_reduction>(global_status.n);
+        global_status.reductions = make_reduction_vector<neighborhood_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction>(global_status.n);
 	}
 
 	global_reduction_map.resize(REDUCTION_NUM);
@@ -40,9 +43,11 @@ branch_and_reduce_algorithm::branch_and_reduce_algorithm(graph_access& G, const 
 		} else {
 			// MISConfig::Reduction_Style::NORMAL
 			if (called_from_fold) {
-				status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction>(status.n);
+				// status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction>(status.n);
+                status.reductions = make_reduction_vector<neighborhood_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction>(status.n);
 			} else {
-				status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction, generalized_fold_reduction>(status.n);
+				// status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction, generalized_fold_reduction>(status.n);
+                status.reductions = make_reduction_vector<neighborhood_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction, generalized_fold_reduction>(status.n);
 			}
 		}
 
@@ -79,6 +84,7 @@ void branch_and_reduce_algorithm::unset_lb(NodeID node) {
 }
 
 void branch_and_reduce_algorithm::set(NodeID node, IS_status mis_status, bool push_modified) {
+    ASSERT_TRUE(status.node_status[node]==IS_status::not_set);
 	status.node_status[node] = mis_status;
 	status.remaining_nodes--;
 	status.graph.hide_node(node);
@@ -251,6 +257,33 @@ void branch_and_reduce_algorithm::compute_ils_pruning_bound() {
 	config_cpy.time_limit = config_cpy.time_limit * status.n / total_ils_node_count / 100;
 
 	best_weight = status.reduction_offset + status.is_weight + run_ils(config_cpy, *local_graph, buffers[0], 1000);
+
+    // update lower bound solution
+    forall_nodes((*local_graph), node) {
+        if (local_graph->getPartitionIndex(node) == 1) {
+            status.lb_node_status[node] = IS_status::included;
+        }else{
+            status.lb_node_status[node] = IS_status::excluded;
+        }
+    } endfor
+
+    #ifndef NDEBUG
+        forall_nodes((*local_graph), node) {
+            if(local_graph->getPartitionIndex(node) == 1) {
+                bool independent = true;
+
+                forall_out_edges((*local_graph), edge, node) {
+                            NodeID neighbor = local_graph->getEdgeTarget(edge);
+                            if (local_graph->getPartitionIndex(neighbor) == 1) {
+                                independent = false;
+                                break;
+                            }
+                        } endfor
+
+                ASSERT_TRUE(independent);
+            }
+        } endfor
+    #endif
 
 	cout_handler::enable_cout();
 	std::cout << (get_current_is_weight() + best_weight) << " [" << t.elapsed() << "]" << std::endl;

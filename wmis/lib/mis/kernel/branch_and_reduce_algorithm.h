@@ -102,8 +102,9 @@ private:
 		graph_status() = default;
 
 		explicit graph_status(graph_access& G) :
-			n(G.number_of_nodes()), remaining_nodes(n), graph(G), weights(n, 0), node_status(n, IS_status::not_set), lb_node_status(n, IS_status::not_set),
-			folded_queue(n), branching_queue(n), modified_queue(n + 1), lb_modified(2*n) {
+			n(G.number_of_nodes()), remaining_nodes(n), graph(G), weights(n, 0), node_status(n, IS_status::not_set),
+            lb_node_status(n, IS_status::not_set), lb_modified(2*n),
+            folded_queue(n), branching_queue(n), modified_queue(n + 1) {
 
 			forall_nodes(G, node) {
 				weights[node] = G.getNodeWeight(node);
