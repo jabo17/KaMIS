@@ -114,6 +114,24 @@ private:
                         lb_node_status[node] = IS_status::included;
                     }
             } endfor
+
+#ifndef NDEBUG
+            forall_nodes((G), node) {
+                        if(G.getPartitionIndex(node) == 1) {
+                            bool independent = true;
+
+                            forall_out_edges(G, edge, node) {
+                                        NodeID neighbor = G.getEdgeTarget(edge);
+                                        if (G.getPartitionIndex(neighbor) == 1) {
+                                            independent = false;
+                                            break;
+                                        }
+                                    } endfor
+
+                            ASSERT_TRUE(independent);
+                        }
+            } endfor
+#endif
 		}
 	};
 

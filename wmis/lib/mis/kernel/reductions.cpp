@@ -1062,6 +1062,7 @@ void generalized_fold_reduction::fold(branch_and_reduce_algorithm* br_alg, NodeI
 
 void generalized_fold_reduction::restore(branch_and_reduce_algorithm* br_alg) {
 	auto& status = br_alg->status;
+    ASSERT_TRUE(!restore_vec.empty());
 	auto& data = restore_vec.back();
 
 	// is "restored" in following loops

@@ -21,15 +21,15 @@ branch_and_reduce_algorithm::branch_and_reduce_algorithm(graph_access& G, const 
 	: config(config), global_status(G), set_1(global_status.n), set_2(global_status.n), double_set(global_status.n * 2), buffers(2, sized_vector<NodeID>(global_status.n)) {
 
 	if (called_from_fold) {
-		// global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction>(global_status.n);
-        global_status.reductions = make_reduction_vector<neighborhood_reduction, clique_reduction, domination_reduction, twin_reduction>(global_status.n);
+		global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction>(global_status.n);
+        // global_status.reductions = make_reduction_vector<neighborhood_reduction, clique_reduction, domination_reduction, twin_reduction>(global_status.n);
 	} else if (config.reduction_style == MISConfig::Reduction_Style::DENSE) {
-		// global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, generalized_fold_reduction>(global_status.n);
-        global_status.reductions = make_reduction_vector<neighborhood_reduction, clique_reduction, domination_reduction, twin_reduction>(global_status.n);
+		global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, generalized_fold_reduction>(global_status.n);
+        // global_status.reductions = make_reduction_vector<neighborhood_reduction, clique_reduction, domination_reduction, twin_reduction>(global_status.n);
 	} else {
 		// MISConfig::Reduction_Style::NORMAL
-		// global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction, generalized_fold_reduction>(global_status.n);
-        global_status.reductions = make_reduction_vector<neighborhood_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction>(global_status.n);
+		global_status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction, generalized_fold_reduction>(global_status.n);
+        // global_status.reductions = make_reduction_vector<neighborhood_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction>(global_status.n);
 	}
 
 	global_reduction_map.resize(REDUCTION_NUM);
@@ -43,11 +43,11 @@ branch_and_reduce_algorithm::branch_and_reduce_algorithm(graph_access& G, const 
 		} else {
 			// MISConfig::Reduction_Style::NORMAL
 			if (called_from_fold) {
-				// status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction>(status.n);
-                status.reductions = make_reduction_vector<neighborhood_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction>(status.n);
+				status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction>(status.n);
+                // status.reductions = make_reduction_vector<neighborhood_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction>(status.n);
 			} else {
-				// status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction, generalized_fold_reduction>(status.n);
-                status.reductions = make_reduction_vector<neighborhood_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction, generalized_fold_reduction>(status.n);
+				status.reductions = make_reduction_vector<neighborhood_reduction, fold2_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction, generalized_fold_reduction>(status.n);
+                // status.reductions = make_reduction_vector<neighborhood_reduction, clique_reduction, domination_reduction, twin_reduction, clique_neighborhood_reduction, critical_set_reduction>(status.n);
 			}
 		}
 
@@ -211,23 +211,6 @@ void branch_and_reduce_algorithm::greedy_initial_is(graph_access& G, sized_vecto
 		return G.getNodeWeight(lhs) > G.getNodeWeight(rhs);
 	});
 
-	for (NodeID node : nodes) {
-        if(G.getPartitionIndex(node) == 1) {
-            continue;
-        }
-		bool free_node = true;
-
-		forall_out_edges(G, edge, node) {
-			NodeID neighbor = G.getEdgeTarget(edge);
-			if (G.getPartitionIndex(neighbor) == 1) {
-				free_node = false;
-				break;
-			}
-		} endfor
-
-		if (free_node) G.setPartitionIndex(node, 1);
-	}
-
 #ifndef NDEBUG
     for (NodeID node : nodes) {
         if(G.getPartitionIndex(node) == 1) {
@@ -245,6 +228,24 @@ void branch_and_reduce_algorithm::greedy_initial_is(graph_access& G, sized_vecto
         }
     }
 #endif
+
+	for (NodeID node : nodes) {
+        if(G.getPartitionIndex(node) == 1) {
+            continue;
+        }
+		bool free_node = true;
+
+		forall_out_edges(G, edge, node) {
+			NodeID neighbor = G.getEdgeTarget(edge);
+			if (G.getPartitionIndex(neighbor) == 1) {
+				free_node = false;
+				break;
+			}
+		} endfor
+
+		if (free_node) G.setPartitionIndex(node, 1);
+	}
+
 }
 
 
@@ -601,7 +602,7 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
 			update_best_solution();
 			reverse_branching();
 			i = status.branching_queue.back().pos;
-            if(!is_ils_best_solution && status.modified_queue.size() < best_solution_status.modified_queue.size()) {
+            if(status.modified_queue.size() < best_solution_status.modified_queue.size()) {
                 apply_branching();
             }
 			continue;
@@ -630,7 +631,8 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
 				reverse_branching();
 
 				i = status.branching_queue.back().pos;
-                if(!is_ils_best_solution && status.modified_queue.size() < best_solution_status.modified_queue.size()) {
+                if(status.modified_queue.size() < best_solution_status.modified_queue.size()) {
+                    status.lb_node_status[branch_node] = best_solution_status.node_status[branch_node];
                     apply_branching();
                 }
 
@@ -638,7 +640,7 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
 			}
 		}
 		else if (!improvement_possible) {
-			if (!status.branching_queue.empty() && status.branching_queue.back().node == branch_node) {
+			if ( status.branching_queue.back().node == branch_node) {
 				status.branching_queue.pop_back();
 				unset(branch_node);
 			}
@@ -648,7 +650,8 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
 
 			reverse_branching();
 			i = status.branching_queue.back().pos;
-            if(!is_ils_best_solution && status.modified_queue.size() < best_solution_status.modified_queue.size()) {
+            if(status.modified_queue.size() < best_solution_status.modified_queue.size()) {
+                status.lb_node_status[branch_node] = best_solution_status.node_status[branch_node];
                 apply_branching();
             }
 			continue;
@@ -665,7 +668,7 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
 			update_best_solution();
 			reverse_branching();
 			i = status.branching_queue.back().pos;
-            if(!is_ils_best_solution && status.modified_queue.size() < best_solution_status.modified_queue.size()) {
+            if(status.modified_queue.size() < best_solution_status.modified_queue.size()) {
                 apply_branching();
             }
 		}
@@ -748,6 +751,23 @@ bool branch_and_reduce_algorithm::run_branch_reduce() {
                         local_graph->setPartitionIndex(local_node, 0);
                     }
                 } endfor
+#ifndef NDEBUG
+        forall_nodes((*local_graph), local_node) {
+            if(local_graph->getPartitionIndex(local_node) == 1) {
+                bool independent = true;
+
+                forall_out_edges((*local_graph), edge, local_node) {
+                            NodeID neighbor = local_graph->getEdgeTarget(edge);
+                            if (local_graph->getPartitionIndex(neighbor) == 1) {
+                                independent = false;
+                                break;
+                            }
+                        } endfor
+
+                ASSERT_TRUE(independent);
+            }
+        } endfor
+#endif
         //std::cout << "setting lb: " << lb << std::endl;
 
 		status = graph_status(*local_graph);
@@ -816,6 +836,7 @@ void branch_and_reduce_algorithm::reverse_branching() {
 }
 
 void branch_and_reduce_algorithm::apply_branching() {
+    ASSERT_TRUE(!is_ils_best_solution);
     using std::swap;
 
     // apply reductions to best_solution_status
