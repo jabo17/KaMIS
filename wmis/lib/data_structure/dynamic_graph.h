@@ -22,9 +22,9 @@ public:
 		using const_iterator = std::vector<NodeID>::const_iterator;
 
 		neighbor_list() = default;
-		neighbor_list(size_t size) : neighbors(size) {};
-		neighbor_list(const std::vector<NodeID>& neighbors) : neighbors(neighbors), counter(neighbors.size()) {}
-		neighbor_list(std::vector<NodeID>&& neighbors) : neighbors(std::move(neighbors)), counter(this->neighbors.size()) {}
+		explicit neighbor_list(size_t size) : neighbors(size) {};
+		explicit neighbor_list(const std::vector<NodeID>& neighbors) : neighbors(neighbors), counter(neighbors.size()) {}
+		explicit neighbor_list(std::vector<NodeID>&& neighbors) : neighbors(std::move(neighbors)), counter(this->neighbors.size()) {}
 
 		iterator begin() { return neighbors.begin(); }
 		iterator end() { return neighbors.begin() + counter; }
@@ -44,9 +44,9 @@ public:
 		size_t counter = 0;
 	};
 
-	dynamic_graph(size_t nodes = 0) : graph(nodes) { graph.reserve(nodes); }
+	explicit dynamic_graph(size_t nodes = 0) : graph(nodes) { graph.reserve(nodes); }
 
-	dynamic_graph(graph_access& G) : graph(G.number_of_nodes()) {
+	explicit dynamic_graph(graph_access& G) : graph(G.number_of_nodes()) {
 		neighbor_list* slot;
 
 		forall_nodes(G, node) {
@@ -59,19 +59,19 @@ public:
 		} endfor
 	}
 
-	dynamic_graph(const std::vector<std::vector<NodeID>>& adj) {
+	explicit dynamic_graph(const std::vector<std::vector<NodeID>>& adj) {
 		graph.reserve(adj.size());
 
 		for (const auto& vec : adj) {
-			graph.push_back(vec);
+			graph.emplace_back(vec);
 		}
 	}
 
-	dynamic_graph(std::vector<std::vector<NodeID>>&& adj) {
+	explicit dynamic_graph(std::vector<std::vector<NodeID>>&& adj) {
 		graph.reserve(adj.size());
 
 		for (auto& vec : adj) {
-			graph.push_back(std::move(vec));
+			graph.emplace_back(std::move(vec));
 		}
 	}
 

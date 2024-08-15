@@ -64,7 +64,7 @@ void branch_and_reduce_algorithm::set_lb(NodeID node, IS_status mis_status) {
     if(mis_status==IS_status::included) {
         for (auto neighbor : status.graph[node]) {
             status.lb_modified.push_back(std::make_pair(neighbor, status.lb_node_status[neighbor]));
-            status.lb_node_status[neighbor] = mis_status;
+            status.lb_node_status[neighbor] = excluded;
         }
     }
 }
@@ -568,7 +568,9 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
 			update_best_solution();
 			reverse_branching();
 			i = status.branching_queue.back().pos;
-            apply_branching();
+            if(!is_ils_best_solution && status.modified_queue.size() < best_solution_status.modified_queue.size()) {
+                apply_branching();
+            }
 			continue;
 		}
 
@@ -630,7 +632,9 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
 			update_best_solution();
 			reverse_branching();
 			i = status.branching_queue.back().pos;
-            apply_branching();
+            if(!is_ils_best_solution && status.modified_queue.size() < best_solution_status.modified_queue.size()) {
+                apply_branching();
+            }
 		}
 		else {
 			i++;
@@ -788,7 +792,9 @@ void branch_and_reduce_algorithm::apply_branching() {
     auto &lb_node_status = best_solution_status.lb_node_status; // to make it more intuitive
 
     // discard topmost branching token
+
     if (!status.modified_queue.empty()) {
+        ASSERT_TRUE(status.modified_queue.back() == BRANCHING_TOKEN);
         status.modified_queue.pop_back();
     }
     else {

@@ -79,7 +79,7 @@ private:
 		NodeID node;
 		size_t pos;
 
-		node_pos(NodeID node = 0, size_t pos = 0) : node(node), pos(pos) {}
+		explicit node_pos(NodeID node = 0, size_t pos = 0) : node(node), pos(pos) {}
 	};
 
 	struct graph_status {
