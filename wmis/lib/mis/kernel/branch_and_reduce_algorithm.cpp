@@ -364,6 +364,7 @@ void branch_and_reduce_algorithm::add_next_level_neighborhood(const std::vector<
 void branch_and_reduce_algorithm::initial_reduce() {
 	std::swap(global_reduction_map, local_reduction_map);
 	status = std::move(global_status);
+
 	reduce_graph_internal();
 	//status.modified_queue.push_back(INITIAL_REDUCTION_TOKEN);
 
@@ -550,7 +551,10 @@ void branch_and_reduce_algorithm::branch_reduce_single_component() {
 			continue;
 		}
 
+
+	  cout_handler::disable_cout();
 		reduce_graph_internal();
+	  cout_handler::enable_cout();
 
 		if (status.remaining_nodes > SPLIT_CC_LIMIT && branch_reduce_recursive()) {
 			status.modified_queue.push_back(BRANCHING_TOKEN);
