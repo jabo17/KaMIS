@@ -38,8 +38,10 @@ bool is_IS(graph_access& G) {
         return true;
 }
 
+
+constexpr NodeWeight MAX_WEIGHT = 50;
+
 void assign_weights(graph_access& G, const MISConfig& mis_config) {
-        constexpr NodeWeight MAX_WEIGHT = 200;
 
         if (mis_config.weight_source == MISConfig::Weight_Source::HYBRID) {
                 forall_nodes(G, node) {
@@ -83,6 +85,16 @@ int main(int argn, char **argv) {
         std::string comments;
         graph_io::readGraphWeighted(G, graph_filepath, comments);
         assign_weights(G, mis_config);
+
+	std::string weight_style = "hybrid";
+        if (mis_config.weight_source == MISConfig::Weight_Source::UNIFORM) {
+		weight_style="uniform";
+        } else if (mis_config.weight_source == MISConfig::Weight_Source::GEOMETRIC) {
+                weight_style="geometric";
+	}
+	graph_io::writeGraphNodeWeighted(G, mis_config.output_filename);
+
+	return 0;
 
         mis_log::instance()->set_graph(G);
 
